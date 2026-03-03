@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import express from 'express';
 import { createServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
@@ -89,6 +91,17 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
   if (!res.headersSent) {
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// Serve client static files in production
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const clientDist = join(__dirname, '../../client/dist');
+app.use(express.static(clientDist));
+app.get('*', (_req, res, next) => {
+  if (_req.path.startsWith('/api') || _req.path.startsWith('/socket.io')) {
+    return next();
+  }
+  res.sendFile(join(clientDist, 'index.html'));
 });
 
 // Create HTTP + Socket.IO servers
