@@ -1,4 +1,5 @@
-import { Authflow, Titles } from 'prismarine-auth';
+import prismarineAuth from 'prismarine-auth';
+const { Authflow, Titles } = prismarineAuth;
 import pino from 'pino';
 import { updateAccount, getAccountWithTokenCache } from '../db/accounts.js';
 
