@@ -5,6 +5,7 @@ import AppShell from '@/components/AppShell';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Landing from '@/pages/Landing';
 import Login from '@/pages/Login';
+import Confirm from '@/pages/Confirm';
 import Dashboard from '@/pages/Dashboard';
 import Accounts from '@/pages/Accounts';
 import Controls from '@/pages/Controls';
@@ -50,6 +51,7 @@ export default function App() {
       <Routes location={location} key={location.pathname}>
         <Route path="/" element={<HomeRedirect />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/confirm" element={<Confirm />} />
         <Route
           path="/*"
           element={

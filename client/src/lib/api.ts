@@ -46,6 +46,9 @@ export const createAccount = (data: CreateAccountPayload) =>
 export const deleteAccount = (id: string) =>
   api.delete(`/accounts/${id}`).then((r) => r.data);
 
+export const startAccountAuth = (id: string) =>
+  api.post<{ user_code: string; verification_uri: string }>(`/accounts/${id}/auth`).then((r) => r.data);
+
 // Servers
 export const getServers = () =>
   api.get<Server[]>('/servers').then((r) => r.data);

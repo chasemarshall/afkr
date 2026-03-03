@@ -11,6 +11,7 @@ import {
 import { authService } from '../services/AuthService.js';
 import { requireAuthenticatedUserId } from '../middleware/auth.js';
 import { validateParamId } from '../middleware/validate.js';
+import { isAdminUserId } from '../db/ownership.js';
 
 const logger = pino({ name: 'routes:accounts' });
 const router = Router();
@@ -121,8 +122,29 @@ router.post('/:id/auth', async (req: Request, res: Response) => {
     // Start auth flow - respond immediately with device code info
     let responded = false;
 
+    // Lazy import to avoid circular dependency
+    const { io } = await import('../index.js');
+
+    // Helper to emit to the owner's connected sockets
+    function emitToOwner(event: string, data: Record<string, unknown>) {
+      for (const client of io.sockets.sockets.values()) {
+        const clientUserId = client.data.userId;
+        if (!clientUserId) continue;
+        if (isAdminUserId(clientUserId) || clientUserId === userId) {
+          (client as any).emit(event, data);
+        }
+      }
+    }
+
     authService
       .authenticateAccount(accountId, userId, (userCode, verificationUri) => {
+        // Emit device code via socket for any listening clients
+        emitToOwner('auth:device_code', {
+          account_id: accountId,
+          user_code: userCode,
+          verification_uri: verificationUri,
+        });
+
         if (!responded) {
           responded = true;
           res.json({ user_code: userCode, verification_uri: verificationUri });
@@ -130,9 +152,14 @@ router.post('/:id/auth', async (req: Request, res: Response) => {
       })
       .then((username) => {
         logger.info({ accountId, username }, 'Auth completed via REST');
+        emitToOwner('auth:complete', { account_id: accountId, username });
       })
       .catch((err) => {
         logger.error({ accountId, err }, 'Auth failed');
+        emitToOwner('auth:error', {
+          account_id: accountId,
+          error: 'Authentication failed',
+        });
         if (!responded) {
           responded = true;
           res.status(500).json({ error: 'Authentication failed' });

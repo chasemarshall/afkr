@@ -151,6 +151,9 @@ io.use((socket, next) => {
     });
 });
 
+// Export io for use in routes that need to emit events
+export { io };
+
 // Setup socket handlers
 setupSocketHandler(io);
 

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Copy, Check, Loader2, ExternalLink } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { createAccount } from '@/lib/api';
+import { createAccount, startAccountAuth } from '@/lib/api';
 import { socket } from '@/lib/socket';
 import { useToast } from '@/components/Toast';
 
@@ -33,11 +33,28 @@ export default function AddAccountModal({ open, onClose }: Props) {
   const { toast } = useToast();
 
   const mutation = useMutation({
-    mutationFn: createAccount,
-    onSuccess: () => {
+    mutationFn: async (data: { username: string; microsoft_email: string }) => {
+      // Step 1: Create the account
+      const account = await createAccount(data);
       setWaitingForAuth(true);
+
+      // Step 2: Start the Microsoft auth flow
+      try {
+        const authData = await startAccountAuth(account.id);
+        // Got the device code from REST — show it
+        setDeviceCode({
+          user_code: authData.user_code,
+          verification_uri: authData.verification_uri,
+        });
+      } catch {
+        // Auth flow might emit device code via socket instead, or it may have
+        // cached tokens and completed instantly — keep waiting
+      }
+
+      return account;
     },
     onError: (err: Error) => {
+      setWaitingForAuth(false);
       toast(err.message || 'failed to create account', 'error');
     },
   });
