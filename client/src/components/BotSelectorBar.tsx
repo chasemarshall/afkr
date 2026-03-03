@@ -100,10 +100,16 @@ export default function BotSelectorBar() {
               <span className="hidden sm:inline">disconnect</span>
             </motion.button>
           ) : isConnecting ? (
-            <span className="flex items-center gap-1 text-[10px] text-subtext0">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleDisconnect}
+              title="cancel connection"
+              className="flex items-center gap-1 text-[10px] text-yellow transition-colors hover:text-red"
+            >
               <Loader2 size={12} className="animate-spin" />
-              <span className="hidden sm:inline">connecting</span>
-            </span>
+              <span className="hidden sm:inline">cancel</span>
+            </motion.button>
           ) : (
             <motion.button
               whileHover={{ scale: 1.05 }}

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, X } from 'lucide-react';
 import type { BotState } from '@afkr/shared';
+import { socket } from '@/lib/socket';
 import StatusIndicator from '@/components/StatusIndicator';
 
 interface Props {
@@ -78,7 +79,22 @@ export default function BotCard({ state, username, index = 0 }: Props) {
       {/* Header */}
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-text">{username}</h3>
-        <StatusIndicator status={state.status} showLabel />
+        <div className="flex items-center gap-2">
+          {state.status === 'connecting' && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => socket.emit('bot:disconnect', state.account_id)}
+              className="flex items-center gap-1 text-[10px] text-yellow transition-colors hover:text-red"
+            >
+              <X size={10} />
+              cancel
+            </motion.button>
+          )}
+          <StatusIndicator status={state.status} showLabel />
+        </div>
       </div>
 
       {/* Server */}
