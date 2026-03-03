@@ -44,7 +44,18 @@ const app = express();
 app.set('trust proxy', config.TRUST_PROXY);
 
 // Security headers
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "https://static.cloudflareinsights.com"],
+      connectSrc: ["'self'", "https://*.supabase.co", "wss://*.supabase.co", `wss://${new URL(config.CLIENT_URL).host}`],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "blob:"],
+    },
+  },
+}));
 app.disable('x-powered-by');
 
 // CORS - strict origin
@@ -121,9 +132,13 @@ const io = new SocketServer<ClientToServerEvents, ServerToClientEvents, never, {
 });
 
 io.use((socket, next) => {
+  const hasToken = !!socket.handshake.auth?.token;
+  const hasApiKey = !!socket.handshake.auth?.apiKey;
+  logger.info({ hasToken, hasApiKey, origin: socket.handshake.headers.origin }, 'Socket auth attempt');
   resolveUserIdFromSocketHandshake(socket.handshake)
     .then((userId) => {
       if (!userId) {
+        logger.warn({ hasToken, hasApiKey }, 'Socket auth rejected');
         next(new Error('unauthorized'));
         return;
       }

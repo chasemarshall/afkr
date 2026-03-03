@@ -16,6 +16,7 @@ export const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(
   window.location.origin,
   {
     autoConnect: true,
+    transports: ['websocket'],
     reconnection: true,
     reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,
