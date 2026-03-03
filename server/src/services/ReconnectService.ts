@@ -6,6 +6,8 @@ const logger = pino({ name: 'ReconnectService' });
 class ReconnectService {
   private reconnectTimers = new Map<string, NodeJS.Timeout>();
   private reconnectAttempts = new Map<string, number>();
+  // Synchronous lock to prevent duplicate scheduling from concurrent disconnect events
+  private scheduling = new Set<string>();
 
   private getKey(accountId: string, userId: string): string {
     return `${userId}:${accountId}`;
@@ -15,57 +17,62 @@ class ReconnectService {
     try {
       const key = this.getKey(accountId, userId);
 
-      // Skip if a reconnect timer is already pending for this account
-      if (this.reconnectTimers.has(key)) {
+      // Skip if a reconnect is already pending or being scheduled
+      if (this.reconnectTimers.has(key) || this.scheduling.has(key)) {
         logger.info({ accountId }, 'Reconnect already scheduled, skipping');
         return;
       }
 
-      const account = await getAccountById(accountId, userId);
-      if (!account || !account.auto_reconnect) {
-        logger.info({ accountId }, 'Auto-reconnect disabled, skipping');
-        return;
-      }
+      // Claim the slot synchronously before any async work
+      this.scheduling.add(key);
 
-      const attempts = this.reconnectAttempts.get(key) || 0;
-      if (attempts >= account.max_reconnect_attempts) {
-        logger.warn(
-          { accountId, attempts },
-          'Max reconnect attempts reached'
-        );
-        this.reconnectAttempts.delete(key);
-        return;
-      }
-
-      const nextAttempt = attempts + 1;
-      this.reconnectAttempts.set(key, nextAttempt);
-
-      // Exponential backoff: base_delay * 2^attempt
-      const delay = account.reconnect_delay_ms * Math.pow(2, attempts);
-      logger.info(
-        { accountId, attempt: nextAttempt, delay },
-        'Scheduling reconnect'
-      );
-
-      const timer = setTimeout(async () => {
-        this.reconnectTimers.delete(key);
-        try {
-          // Lazy import to avoid circular dependency
-          const { botManager } = await import('./BotManager.js');
-          const bot = botManager.getBot(accountId, userId);
-          if (bot) {
-            bot.setReconnectAttempts(nextAttempt);
-          }
-          await botManager.connectBot(accountId, serverId, userId);
-          this.reconnectAttempts.delete(key);
-          logger.info({ accountId }, 'Reconnect successful');
-        } catch (err) {
-          logger.error({ accountId, err }, 'Reconnect attempt failed');
-          // handleDisconnect will be called again by the BotManager disconnect event
+      try {
+        const account = await getAccountById(accountId, userId);
+        if (!account || !account.auto_reconnect) {
+          logger.info({ accountId }, 'Auto-reconnect disabled, skipping');
+          return;
         }
-      }, delay);
 
-      this.reconnectTimers.set(key, timer);
+        const attempts = this.reconnectAttempts.get(key) || 0;
+        if (attempts >= account.max_reconnect_attempts) {
+          logger.warn(
+            { accountId, attempts },
+            'Max reconnect attempts reached'
+          );
+          this.reconnectAttempts.delete(key);
+          return;
+        }
+
+        const nextAttempt = attempts + 1;
+        this.reconnectAttempts.set(key, nextAttempt);
+
+        // Exponential backoff: base_delay * 2^attempt
+        const delay = account.reconnect_delay_ms * Math.pow(2, attempts);
+        logger.info(
+          { accountId, attempt: nextAttempt, delay },
+          'Scheduling reconnect'
+        );
+
+        const timer = setTimeout(async () => {
+          this.reconnectTimers.delete(key);
+          try {
+            const { botManager } = await import('./BotManager.js');
+            const bot = botManager.getBot(accountId, userId);
+            if (bot) {
+              bot.setReconnectAttempts(nextAttempt);
+            }
+            await botManager.connectBot(accountId, serverId, userId);
+            this.reconnectAttempts.delete(key);
+            logger.info({ accountId }, 'Reconnect successful');
+          } catch (err) {
+            logger.error({ accountId, err }, 'Reconnect attempt failed');
+          }
+        }, delay);
+
+        this.reconnectTimers.set(key, timer);
+      } finally {
+        this.scheduling.delete(key);
+      }
     } catch (err) {
       logger.error({ accountId, err }, 'Error in handleDisconnect');
     }
@@ -79,6 +86,7 @@ class ReconnectService {
       this.reconnectTimers.delete(key);
     }
     this.reconnectAttempts.delete(key);
+    this.scheduling.delete(key);
   }
 }
 
