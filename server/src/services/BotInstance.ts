@@ -119,8 +119,16 @@ export class BotInstance extends EventEmitter {
             this.bot.inventory.on('updateSlot', () => {
               this.updateInventory();
             });
+            // Initial inventory may not be populated at spawn — retry a few times
             this.updateInventory();
+            setTimeout(() => this.updateInventory(), 1000);
+            setTimeout(() => this.updateInventory(), 3000);
+            setTimeout(() => this.updateInventory(), 8000);
           }
+          // Also refresh on collect events
+          this.bot?.on('playerCollect', () => {
+            setTimeout(() => this.updateInventory(), 100);
+          });
 
           resolve();
         });
@@ -189,12 +197,27 @@ export class BotInstance extends EventEmitter {
   private updateInventory(): void {
     if (!this.bot) return;
     try {
-      this.inventory = this.bot.inventory.items().map((item) => ({
+      const items = this.bot.inventory.items();
+      this.inventory = items.map((item) => ({
         slot: item.slot,
         name: item.name,
         count: item.count,
         display_name: item.displayName || item.name,
       }));
+      // Also include items from slots array as fallback (armor, offhand)
+      if (this.inventory.length === 0 && this.bot.inventory.slots) {
+        const slotItems = this.bot.inventory.slots
+          .filter((s): s is NonNullable<typeof s> => s != null && s.count > 0)
+          .map((item) => ({
+            slot: item.slot,
+            name: item.name,
+            count: item.count,
+            display_name: item.displayName || item.name,
+          }));
+        if (slotItems.length > 0) {
+          this.inventory = slotItems;
+        }
+      }
       this.emit('stateChange', this.getState());
     } catch {
       // Ignore inventory errors during transitions
