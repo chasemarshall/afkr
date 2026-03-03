@@ -113,6 +113,15 @@ export class BotInstance extends EventEmitter {
           this.reconnectAttempts = 0;
           this.setStatus('online');
           this.startAntiIdle();
+
+          // Track inventory changes (inventory is only available after spawn)
+          if (this.bot?.inventory) {
+            this.bot.inventory.on('updateSlot', () => {
+              this.updateInventory();
+            });
+            this.updateInventory();
+          }
+
           resolve();
         });
 
@@ -132,11 +141,6 @@ export class BotInstance extends EventEmitter {
               z: Math.round(this.bot.entity.position.z * 100) / 100,
             };
           }
-        });
-
-        // Track inventory changes
-        this.bot.inventory.on('updateSlot', () => {
-          this.updateInventory();
         });
 
         // Auto-accept server resource packs (required by some servers like Minehut)

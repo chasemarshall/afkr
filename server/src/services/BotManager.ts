@@ -83,9 +83,7 @@ class BotManager extends EventEmitter {
 
   disconnectBot(accountId: string, userId: string): void {
     const instance = this.getOwnedBot(accountId, userId);
-    if (!instance) {
-      throw new Error('Bot not found');
-    }
+    if (!instance) return;
 
     // Cancel any pending reconnect
     reconnectService.cancelReconnect(accountId, instance.ownerUserId);
@@ -137,7 +135,7 @@ class BotManager extends EventEmitter {
 
   setAntiAfk(accountId: string, enabled: boolean, userId: string, intervalMs?: number): void {
     const instance = this.getOwnedBot(accountId, userId);
-    if (!instance) throw new Error('Bot not found');
+    if (!instance) return;
     instance.setAntiAfk(enabled, intervalMs);
   }
 

@@ -8,6 +8,7 @@ import { useSocket } from '@/context/SocketContext';
 import { useToast } from '@/components/Toast';
 import StatusIndicator from '@/components/StatusIndicator';
 import PageTransition from '@/components/PageTransition';
+import { usePersistedState } from '@/hooks/usePersistedState';
 import type { CommandHistoryEntry, Server, MovementDirection } from '@afkr/shared';
 
 const SENSITIVITY = 0.003; // mouse sensitivity for yaw/pitch
@@ -29,20 +30,20 @@ const sectionVariants = {
 };
 
 export default function Controls() {
-  const [selectedAccount, setSelectedAccount] = useState('');
-  const [selectedServer, setSelectedServer] = useState('');
+  const [selectedAccount, setSelectedAccount] = usePersistedState('connect-account', '');
+  const [selectedServer, setSelectedServer] = usePersistedState('connect-server', '');
   const [command, setCommand] = useState('');
-  const [cmdAccount, setCmdAccount] = useState('');
+  const [cmdAccount, setCmdAccount] = usePersistedState('cmd-account', '');
   const [showAddServer, setShowAddServer] = useState(false);
   const [serverName, setServerName] = useState('');
   const [serverHost, setServerHost] = useState('');
   const [serverVersion, setServerVersion] = useState('');
-  const [chatAccount, setChatAccount] = useState('');
+  const [chatAccount, setChatAccount] = usePersistedState('chat-account', '');
   const [editingServer, setEditingServer] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editHost, setEditHost] = useState('');
   const [editVersion, setEditVersion] = useState('');
-  const [moveAccount, setMoveAccount] = useState('');
+  const [moveAccount, setMoveAccount] = usePersistedState('move-account', '');
   const [activeDir, setActiveDir] = useState<string | null>(null);
   const [mouseLook, setMouseLook] = useState(false);
   const keysHeldRef = useRef(new Set<string>());
