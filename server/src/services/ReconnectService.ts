@@ -8,12 +8,28 @@ class ReconnectService {
   private reconnectAttempts = new Map<string, number>();
   // Synchronous lock to prevent duplicate scheduling from concurrent disconnect events
   private scheduling = new Set<string>();
+  private _disabled = false;
 
   private getKey(accountId: string, userId: string): string {
     return `${userId}:${accountId}`;
   }
 
+  /** Disable all reconnects (used during graceful shutdown) */
+  disable(): void {
+    this._disabled = true;
+    // Clear all pending reconnect timers
+    for (const timer of this.reconnectTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.reconnectTimers.clear();
+    this.reconnectAttempts.clear();
+    this.scheduling.clear();
+    logger.info('Reconnect service disabled — all pending reconnects cancelled');
+  }
+
   async handleDisconnect(accountId: string, serverId: string, userId: string): Promise<void> {
+    if (this._disabled) return;
+
     try {
       const key = this.getKey(accountId, userId);
 

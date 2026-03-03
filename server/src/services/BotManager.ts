@@ -154,6 +154,21 @@ class BotManager extends EventEmitter {
     return states;
   }
 
+  /** Gracefully disconnect all bots (used during shutdown). Disables reconnects first. */
+  shutdownAll(): void {
+    reconnectService.disable();
+    const count = this.bots.size;
+    for (const [accountId, instance] of this.bots) {
+      try {
+        instance.disconnect();
+      } catch {
+        // ignore errors during shutdown
+      }
+      this.bots.delete(accountId);
+    }
+    logger.info({ count }, 'All bots disconnected for shutdown');
+  }
+
   private getOwnedBot(accountId: string, userId: string): BotInstance | undefined {
     const instance = this.bots.get(accountId);
     if (!instance) return undefined;

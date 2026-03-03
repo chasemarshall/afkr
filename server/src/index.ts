@@ -14,6 +14,7 @@ import {
 import { rateLimit } from './middleware/rateLimit.js';
 import { setupSocketHandler } from './socket/handler.js';
 import { schedulerService } from './services/SchedulerService.js';
+import { botManager } from './services/BotManager.js';
 import accountsRouter from './routes/accounts.js';
 import serversRouter from './routes/servers.js';
 import botsRouter from './routes/bots.js';
@@ -156,6 +157,22 @@ export { io };
 
 // Setup socket handlers
 setupSocketHandler(io);
+
+// Graceful shutdown — disconnect all bots so they don't linger after restart
+function gracefulShutdown(signal: string) {
+  logger.info({ signal }, 'Received shutdown signal — disconnecting all bots');
+  botManager.shutdownAll();
+  schedulerService.stopAll();
+  httpServer.close(() => {
+    logger.info('HTTP server closed');
+    process.exit(0);
+  });
+  // Force exit after 5s if something hangs
+  setTimeout(() => process.exit(0), 5000).unref();
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
 // Start server
 httpServer.listen(config.PORT, async () => {

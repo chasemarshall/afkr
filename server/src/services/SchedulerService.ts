@@ -200,6 +200,15 @@ class SchedulerService {
       logger.info({ scheduleId: id }, 'Schedule deactivated');
     }
   }
+
+  /** Stop all active schedules (used during graceful shutdown) */
+  stopAll(): void {
+    for (const [id, active] of this.activeSchedules) {
+      active.stop();
+      this.activeSchedules.delete(id);
+    }
+    logger.info('All schedules stopped for shutdown');
+  }
 }
 
 export const schedulerService = new SchedulerService();
