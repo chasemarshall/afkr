@@ -47,6 +47,7 @@ export class BotInstance extends EventEmitter {
   private sessionId: string | undefined;
   private errorMessage: string | undefined;
   private reconnectAttempts = 0;
+  private antiIdleInterval: NodeJS.Timeout | null = null;
 
   public readonly accountId: string;
   public readonly ownerUserId: string;
@@ -108,6 +109,7 @@ export class BotInstance extends EventEmitter {
           this.connectedAt = new Date().toISOString();
           this.reconnectAttempts = 0;
           this.setStatus('online');
+          this.startAntiIdle();
           resolve();
         });
 
@@ -127,6 +129,13 @@ export class BotInstance extends EventEmitter {
               z: Math.round(this.bot.entity.position.z * 100) / 100,
             };
           }
+        });
+
+        // Auto-accept server resource packs (required by some servers like Minehut)
+        this.bot.on('resourcePack', () => {
+          logger.info({ accountId: this.accountId }, 'Accepting server resource pack');
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (this.bot as any)?.acceptResourcePack();
         });
 
         this.bot.on('chat', (username: string, message: string) => {
@@ -165,7 +174,31 @@ export class BotInstance extends EventEmitter {
     });
   }
 
+  private startAntiIdle(): void {
+    this.stopAntiIdle();
+    // Every 30s: swing arm + slight look rotation to avoid AFK kicks
+    this.antiIdleInterval = setInterval(() => {
+      if (!this.bot || this.status !== 'online') return;
+      try {
+        this.bot.swingArm('right');
+        // Small random yaw rotation to simulate activity
+        const yaw = this.bot.entity.yaw + (Math.random() - 0.5) * 0.5;
+        this.bot.look(yaw, this.bot.entity.pitch);
+      } catch {
+        // Ignore errors if bot is in a bad state
+      }
+    }, 30_000);
+  }
+
+  private stopAntiIdle(): void {
+    if (this.antiIdleInterval) {
+      clearInterval(this.antiIdleInterval);
+      this.antiIdleInterval = null;
+    }
+  }
+
   disconnect(): void {
+    this.stopAntiIdle();
     if (this.bot) {
       this.bot.quit();
       this.bot.removeAllListeners();
