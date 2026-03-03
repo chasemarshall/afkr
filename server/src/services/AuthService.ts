@@ -74,8 +74,7 @@ class AuthService {
           cacheFactory,
           {
             authTitle: Titles.MinecraftJava,
-            flow: 'live',
-            deviceType: 'Win32',
+            flow: 'sisu',
           },
           (code) => {
             logger.info({ accountId, user_code: code.user_code, verification_uri: code.verification_uri }, 'Device code generated');
