@@ -21,9 +21,9 @@ declare global {
  * Both inputs are HMAC'd to normalize to the same length before comparison.
  */
 function secureCompare(input: string, expected: string): boolean {
-  // HMAC both values with a static key to normalize length,
-  // preventing timing side-channel leaks on differing lengths.
-  const hmacKey = 'afkr-secure-compare';
+  // HMAC both values to normalize length, preventing timing side-channel
+  // leaks on differing-length inputs. Key is derived from the instance secret.
+  const hmacKey = Buffer.from(config.ENCRYPTION_KEY, 'hex');
   const inputHash = createHmac('sha256', hmacKey).update(input).digest();
   const expectedHash = createHmac('sha256', hmacKey).update(expected).digest();
   return timingSafeEqual(inputHash, expectedHash);

@@ -37,6 +37,11 @@ function isDisallowedHost(rawHost: string): boolean {
     if (host === '::1' || host.startsWith('fe80:') || host.startsWith('fc') || host.startsWith('fd')) {
       return true;
     }
+    // IPv4-mapped IPv6 (::ffff:192.168.x.x) — extract embedded IPv4 and re-check
+    const ipv4Mapped = host.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+    if (ipv4Mapped) {
+      return isDisallowedHost(ipv4Mapped[1]);
+    }
   }
 
   return false;

@@ -11,8 +11,6 @@ import type {
 } from '@afkr/shared';
 import { supabase } from './supabase';
 
-const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY as string | undefined;
-
 const api = axios.create({
   baseURL: '/api',
   headers: { 'Content-Type': 'application/json' },
@@ -27,10 +25,6 @@ api.interceptors.request.use(async (requestConfig) => {
     requestConfig.headers.Authorization = `Bearer ${token}`;
   } else {
     delete requestConfig.headers.Authorization;
-  }
-
-  if (ADMIN_API_KEY) {
-    requestConfig.headers['x-api-key'] = ADMIN_API_KEY;
   }
 
   return requestConfig;
