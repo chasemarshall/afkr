@@ -19,7 +19,12 @@ const SOCKET_LIMITS = {
   connect: { max: 12, windowMs: 60_000 },
   disconnect: { max: 24, windowMs: 60_000 },
   command: { max: 90, windowMs: 60_000 },
+  move: { max: 120, windowMs: 60_000 },
+  jump: { max: 60, windowMs: 60_000 },
+  antiAfk: { max: 20, windowMs: 60_000 },
 } as const;
+
+const VALID_DIRECTIONS = new Set(['forward', 'back', 'left', 'right']);
 
 function enforceRateLimit(socketId: string, eventName: string, max: number, windowMs: number): boolean {
   return eventLimiter.isAllowed(socketId, eventName, { max, windowMs });
@@ -162,6 +167,52 @@ export function setupSocketHandler(
         );
       } catch (err) {
         logger.error({ err }, 'Socket bot:command failed');
+      }
+    });
+
+    // Handle bot movement
+    socket.on('bot:move', (payload) => {
+      try {
+        if (!enforceRateLimit(socket.id, 'bot:move', SOCKET_LIMITS.move.max, SOCKET_LIMITS.move.windowMs)) {
+          return;
+        }
+        if (!payload?.account_id || !payload?.direction) return;
+        if (!isValidUuid(payload.account_id)) return;
+        if (!VALID_DIRECTIONS.has(payload.direction)) return;
+        const duration = typeof payload.duration_ms === 'number'
+          ? Math.min(Math.max(payload.duration_ms, 100), 2000)
+          : 400;
+        botManager.moveBot(payload.account_id, payload.direction, userId, duration);
+      } catch (err) {
+        logger.error({ err }, 'Socket bot:move failed');
+      }
+    });
+
+    // Handle bot jump
+    socket.on('bot:jump', (payload) => {
+      try {
+        if (!enforceRateLimit(socket.id, 'bot:jump', SOCKET_LIMITS.jump.max, SOCKET_LIMITS.jump.windowMs)) {
+          return;
+        }
+        if (!payload?.account_id) return;
+        if (!isValidUuid(payload.account_id)) return;
+        botManager.jumpBot(payload.account_id, userId);
+      } catch (err) {
+        logger.error({ err }, 'Socket bot:jump failed');
+      }
+    });
+
+    // Handle anti-AFK toggle
+    socket.on('bot:anti_afk', (payload) => {
+      try {
+        if (!enforceRateLimit(socket.id, 'bot:anti_afk', SOCKET_LIMITS.antiAfk.max, SOCKET_LIMITS.antiAfk.windowMs)) {
+          return;
+        }
+        if (!payload?.account_id || typeof payload.enabled !== 'boolean') return;
+        if (!isValidUuid(payload.account_id)) return;
+        botManager.setAntiAfk(payload.account_id, payload.enabled, userId);
+      } catch (err) {
+        logger.error({ err }, 'Socket bot:anti_afk failed');
       }
     });
 

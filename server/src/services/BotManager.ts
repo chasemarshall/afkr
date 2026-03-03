@@ -7,7 +7,7 @@ import { getServerById } from '../db/servers.js';
 import { createSession, endSession } from '../db/sessions.js';
 import { logCommand } from '../db/commands.js';
 import { isAdminUserId } from '../db/ownership.js';
-import type { BotState, ChatMessage } from '@afkr/shared';
+import type { BotState, ChatMessage, MovementDirection } from '@afkr/shared';
 
 const logger = pino({ name: 'BotManager' });
 
@@ -115,6 +115,24 @@ class BotManager extends EventEmitter {
     } catch (err) {
       logger.error({ err }, 'Failed to log command');
     }
+  }
+
+  moveBot(accountId: string, direction: MovementDirection, userId: string, durationMs?: number): void {
+    const instance = this.getOwnedBot(accountId, userId);
+    if (!instance) throw new Error('Bot not found');
+    instance.move(direction, durationMs);
+  }
+
+  jumpBot(accountId: string, userId: string): void {
+    const instance = this.getOwnedBot(accountId, userId);
+    if (!instance) throw new Error('Bot not found');
+    instance.jump();
+  }
+
+  setAntiAfk(accountId: string, enabled: boolean, userId: string): void {
+    const instance = this.getOwnedBot(accountId, userId);
+    if (!instance) throw new Error('Bot not found');
+    instance.setAntiAfk(enabled);
   }
 
   getBot(accountId: string, userId: string): BotInstance | undefined {

@@ -1,14 +1,14 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Send, Plug, Unplug, Plus, Trash2, MessageSquare, Pencil, Check, X } from 'lucide-react';
+import { Loader2, Send, Plug, Unplug, Plus, Trash2, MessageSquare, Pencil, Check, X, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ArrowUp } from 'lucide-react';
 import { getAccounts, getServers, getCommandHistory, createServer, deleteServer, updateServer } from '@/lib/api';
 import { socket } from '@/lib/socket';
 import { useSocket } from '@/context/SocketContext';
 import { useToast } from '@/components/Toast';
 import StatusIndicator from '@/components/StatusIndicator';
 import PageTransition from '@/components/PageTransition';
-import type { CommandHistoryEntry, Server } from '@afkr/shared';
+import type { CommandHistoryEntry, Server, MovementDirection } from '@afkr/shared';
 
 const MC_VERSIONS = [
   '1.21.11', '1.21.10', '1.21.9', '1.21.8', '1.21.7', '1.21.6', '1.21.5',
@@ -40,6 +40,8 @@ export default function Controls() {
   const [editName, setEditName] = useState('');
   const [editHost, setEditHost] = useState('');
   const [editVersion, setEditVersion] = useState('');
+  const [moveAccount, setMoveAccount] = useState('');
+  const [activeDir, setActiveDir] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const chatRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
@@ -134,6 +136,60 @@ export default function Controls() {
     setCommand('');
     toast('command sent', 'success');
   }
+
+  // Get target account IDs for movement (supports "all")
+  const getMoveTargets = useCallback((): string[] => {
+    if (moveAccount === '__all__') {
+      return (accounts ?? [])
+        .filter((a) => botStates.get(a.id)?.status === 'online')
+        .map((a) => a.id);
+    }
+    return moveAccount ? [moveAccount] : [];
+  }, [moveAccount, accounts, botStates]);
+
+  function handleMove(direction: MovementDirection) {
+    const targets = getMoveTargets();
+    if (targets.length === 0) {
+      toast('select an online account', 'error');
+      return;
+    }
+    setActiveDir(direction);
+    setTimeout(() => setActiveDir(null), 200);
+    for (const id of targets) {
+      socket.emit('bot:move', { account_id: id, direction });
+    }
+  }
+
+  function handleJump() {
+    const targets = getMoveTargets();
+    if (targets.length === 0) {
+      toast('select an online account', 'error');
+      return;
+    }
+    setActiveDir('jump');
+    setTimeout(() => setActiveDir(null), 200);
+    for (const id of targets) {
+      socket.emit('bot:jump', { account_id: id });
+    }
+  }
+
+  function handleToggleAntiAfk(accountId: string, enabled: boolean) {
+    socket.emit('bot:anti_afk', { account_id: accountId, enabled });
+  }
+
+  // Keyboard controls for movement
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
+      const map: Record<string, MovementDirection> = { w: 'forward', s: 'back', a: 'left', d: 'right' };
+      const arrowMap: Record<string, MovementDirection> = { ArrowUp: 'forward', ArrowDown: 'back', ArrowLeft: 'left', ArrowRight: 'right' };
+      const dir = map[e.key.toLowerCase()] || arrowMap[e.key];
+      if (dir) { e.preventDefault(); handleMove(dir); }
+      if (e.key === ' ') { e.preventDefault(); handleJump(); }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  });
 
   function startEditServer(s: Server) {
     setEditingServer(s.id);
@@ -448,6 +504,137 @@ export default function Controls() {
               <Unplug size={14} />
               disconnect
             </motion.button>
+          </div>
+        </motion.section>
+
+        <div className="border-t border-surface0" />
+
+        {/* Movement */}
+        <motion.section variants={sectionVariants} transition={{ type: 'spring', stiffness: 200, damping: 20 }}>
+          <h2 className="mb-4 text-xs font-medium uppercase tracking-wider text-subtext0">
+            movement
+          </h2>
+
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
+            {/* Account selector + anti-AFK */}
+            <div className="space-y-3 sm:w-48">
+              <div>
+                <label className="mb-1.5 block text-xs text-overlay1">account</label>
+                <select
+                  value={moveAccount}
+                  onChange={(e) => setMoveAccount(e.target.value)}
+                  className="w-full text-sm"
+                >
+                  <option value="">select...</option>
+                  <option value="__all__">all online</option>
+                  {accounts?.map((a) => (
+                    <option key={a.id} value={a.id}>{a.username}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Anti-AFK toggles */}
+              <div className="space-y-1.5">
+                <span className="block text-xs text-overlay1">anti-afk</span>
+                {accounts?.filter((a) => botStates.get(a.id)?.status === 'online').map((a) => {
+                  const state = botStates.get(a.id);
+                  const isOn = state?.anti_afk !== false;
+                  return (
+                    <div key={a.id} className="flex items-center justify-between py-1">
+                      <span className="text-xs text-subtext0">{a.username}</span>
+                      <motion.button
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => handleToggleAntiAfk(a.id, !isOn)}
+                        className={`relative h-5 w-9 rounded-full transition-colors duration-200 ${
+                          isOn ? 'bg-green/30' : 'bg-surface1'
+                        }`}
+                      >
+                        <motion.div
+                          animate={{ x: isOn ? 16 : 2 }}
+                          transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                          className={`absolute top-0.5 h-4 w-4 rounded-full transition-colors duration-200 ${
+                            isOn ? 'bg-green' : 'bg-overlay0'
+                          }`}
+                        />
+                      </motion.button>
+                    </div>
+                  );
+                })}
+                {(!accounts || accounts.filter((a) => botStates.get(a.id)?.status === 'online').length === 0) && (
+                  <p className="text-xs text-overlay0">no bots online</p>
+                )}
+              </div>
+            </div>
+
+            {/* D-Pad */}
+            <div className="flex flex-1 items-center justify-center">
+              <div className="grid grid-cols-3 grid-rows-3 gap-1" style={{ width: 132, height: 132 }}>
+                {/* Row 1: empty, forward, empty */}
+                <div />
+                <motion.button
+                  whileTap={{ scale: 0.85 }}
+                  onPointerDown={() => handleMove('forward')}
+                  className={`flex items-center justify-center rounded transition-colors ${
+                    activeDir === 'forward' ? 'bg-lavender/20 text-lavender' : 'bg-surface0/50 text-overlay1 hover:bg-surface0 hover:text-text'
+                  }`}
+                >
+                  <ChevronUp size={20} />
+                </motion.button>
+                <div />
+
+                {/* Row 2: left, jump, right */}
+                <motion.button
+                  whileTap={{ scale: 0.85 }}
+                  onPointerDown={() => handleMove('left')}
+                  className={`flex items-center justify-center rounded transition-colors ${
+                    activeDir === 'left' ? 'bg-lavender/20 text-lavender' : 'bg-surface0/50 text-overlay1 hover:bg-surface0 hover:text-text'
+                  }`}
+                >
+                  <ChevronLeft size={20} />
+                </motion.button>
+                <motion.button
+                  whileTap={{ scale: 0.85 }}
+                  onPointerDown={() => handleJump()}
+                  className={`flex items-center justify-center rounded text-xs transition-colors ${
+                    activeDir === 'jump' ? 'bg-blue/20 text-blue' : 'bg-surface0/50 text-overlay1 hover:bg-surface0 hover:text-text'
+                  }`}
+                >
+                  <ArrowUp size={16} />
+                </motion.button>
+                <motion.button
+                  whileTap={{ scale: 0.85 }}
+                  onPointerDown={() => handleMove('right')}
+                  className={`flex items-center justify-center rounded transition-colors ${
+                    activeDir === 'right' ? 'bg-lavender/20 text-lavender' : 'bg-surface0/50 text-overlay1 hover:bg-surface0 hover:text-text'
+                  }`}
+                >
+                  <ChevronRight size={20} />
+                </motion.button>
+
+                {/* Row 3: empty, backward, empty */}
+                <div />
+                <motion.button
+                  whileTap={{ scale: 0.85 }}
+                  onPointerDown={() => handleMove('back')}
+                  className={`flex items-center justify-center rounded transition-colors ${
+                    activeDir === 'back' ? 'bg-lavender/20 text-lavender' : 'bg-surface0/50 text-overlay1 hover:bg-surface0 hover:text-text'
+                  }`}
+                >
+                  <ChevronDown size={20} />
+                </motion.button>
+                <div />
+              </div>
+            </div>
+
+            {/* Keyboard hint */}
+            <div className="hidden text-xs text-overlay0 sm:block sm:w-32">
+              <p className="mb-2 text-overlay1">keyboard</p>
+              <div className="space-y-1">
+                <p><span className="text-subtext0">wasd</span> move</p>
+                <p><span className="text-subtext0">arrows</span> move</p>
+                <p><span className="text-subtext0">space</span> jump</p>
+              </div>
+            </div>
           </div>
         </motion.section>
 

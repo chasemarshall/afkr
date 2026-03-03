@@ -105,6 +105,8 @@ export interface CreateSchedulePayload {
 }
 
 // === Socket.IO Events ===
+export type MovementDirection = 'forward' | 'back' | 'left' | 'right';
+
 export interface BotState {
   account_id: string;
   status: BotStatus;
@@ -116,6 +118,7 @@ export interface BotState {
   connected_at?: string;
   error?: string;
   reconnect_attempts?: number;
+  anti_afk?: boolean;
 }
 
 export interface ChatMessage {
@@ -134,9 +137,27 @@ export interface ServerToClientEvents {
   'auth:error': (data: { account_id: string; error: string }) => void;
 }
 
+export interface MovementPayload {
+  account_id: string;
+  direction: MovementDirection;
+  duration_ms?: number; // how long to hold the key, default 400ms
+}
+
+export interface JumpPayload {
+  account_id: string;
+}
+
+export interface AntiAfkPayload {
+  account_id: string;
+  enabled: boolean;
+}
+
 export interface ClientToServerEvents {
   'bot:connect': (payload: ConnectBotPayload) => void;
   'bot:disconnect': (account_id: string) => void;
   'bot:command': (payload: SendCommandPayload) => void;
   'bot:request_states': () => void;
+  'bot:move': (payload: MovementPayload) => void;
+  'bot:jump': (payload: JumpPayload) => void;
+  'bot:anti_afk': (payload: AntiAfkPayload) => void;
 }
