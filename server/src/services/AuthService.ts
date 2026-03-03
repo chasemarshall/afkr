@@ -70,18 +70,18 @@ class AuthService {
 
         logger.info({ accountId, email: account.microsoft_email }, 'Creating Authflow');
 
-        // Use MSAL flow with Azure AD app for reliable device code auth.
-        // The AZURE_CLIENT_ID env var should be set to your registered Azure app's client ID.
-        // Falls back to prismarine-auth's built-in default if not set.
+        // If AZURE_CLIENT_ID is set, use MSAL flow with that app ID.
+        // Otherwise, fall back to 'live' flow which uses prismarine-auth's
+        // built-in Minecraft title ID (no custom Azure app needed).
         const azureClientId = config.AZURE_CLIENT_ID;
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const authOptions: any = { flow: 'msal' };
-        if (azureClientId) {
-          authOptions.authTitle = azureClientId;
-        }
+        const authOptions: any = azureClientId
+          ? { flow: 'msal', authTitle: azureClientId }
+          : { flow: 'sisu', authTitle: Titles.MinecraftJava, deviceType: 'Win32' };
 
-        logger.info({ accountId, flow: 'msal', hasCustomClientId: !!azureClientId }, 'Auth flow config');
+        const flowType = azureClientId ? 'msal' : 'sisu';
+        logger.info({ accountId, flow: flowType, hasCustomClientId: !!azureClientId }, 'Auth flow config');
 
         const flow = new Authflow(
           account.microsoft_email,
