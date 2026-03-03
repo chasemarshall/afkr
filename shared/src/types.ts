@@ -107,6 +107,13 @@ export interface CreateSchedulePayload {
 // === Socket.IO Events ===
 export type MovementDirection = 'forward' | 'back' | 'left' | 'right';
 
+export interface InventoryItem {
+  slot: number;
+  name: string;
+  count: number;
+  display_name?: string;
+}
+
 export interface BotState {
   account_id: string;
   status: BotStatus;
@@ -119,6 +126,8 @@ export interface BotState {
   error?: string;
   reconnect_attempts?: number;
   anti_afk?: boolean;
+  anti_afk_interval?: number;
+  inventory?: InventoryItem[];
 }
 
 export interface ChatMessage {
@@ -150,6 +159,13 @@ export interface JumpPayload {
 export interface AntiAfkPayload {
   account_id: string;
   enabled: boolean;
+  interval_ms?: number; // custom interval in ms (5000-120000)
+}
+
+export interface LookPayload {
+  account_id: string;
+  yaw_delta: number;   // radians to rotate horizontally
+  pitch_delta: number;  // radians to rotate vertically
 }
 
 export interface ClientToServerEvents {
@@ -160,4 +176,5 @@ export interface ClientToServerEvents {
   'bot:move': (payload: MovementPayload) => void;
   'bot:jump': (payload: JumpPayload) => void;
   'bot:anti_afk': (payload: AntiAfkPayload) => void;
+  'bot:look': (payload: LookPayload) => void;
 }

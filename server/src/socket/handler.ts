@@ -22,6 +22,7 @@ const SOCKET_LIMITS = {
   move: { max: 120, windowMs: 60_000 },
   jump: { max: 60, windowMs: 60_000 },
   antiAfk: { max: 20, windowMs: 60_000 },
+  look: { max: 600, windowMs: 60_000 },
 } as const;
 
 const VALID_DIRECTIONS = new Set(['forward', 'back', 'left', 'right']);
@@ -202,6 +203,24 @@ export function setupSocketHandler(
       }
     });
 
+    // Handle bot look (mouse yaw/pitch)
+    socket.on('bot:look', (payload) => {
+      try {
+        if (!enforceRateLimit(socket.id, 'bot:look', SOCKET_LIMITS.look.max, SOCKET_LIMITS.look.windowMs)) {
+          return;
+        }
+        if (!payload?.account_id) return;
+        if (!isValidUuid(payload.account_id)) return;
+        if (typeof payload.yaw_delta !== 'number' || typeof payload.pitch_delta !== 'number') return;
+        // Clamp deltas to reasonable values (max ~180 degrees per event)
+        const yaw = Math.max(-Math.PI, Math.min(Math.PI, payload.yaw_delta));
+        const pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, payload.pitch_delta));
+        botManager.lookBot(payload.account_id, yaw, pitch, userId);
+      } catch (err) {
+        logger.error({ err }, 'Socket bot:look failed');
+      }
+    });
+
     // Handle anti-AFK toggle
     socket.on('bot:anti_afk', (payload) => {
       try {
@@ -210,7 +229,8 @@ export function setupSocketHandler(
         }
         if (!payload?.account_id || typeof payload.enabled !== 'boolean') return;
         if (!isValidUuid(payload.account_id)) return;
-        botManager.setAntiAfk(payload.account_id, payload.enabled, userId);
+        const interval = typeof payload.interval_ms === 'number' ? payload.interval_ms : undefined;
+        botManager.setAntiAfk(payload.account_id, payload.enabled, userId, interval);
       } catch (err) {
         logger.error({ err }, 'Socket bot:anti_afk failed');
       }

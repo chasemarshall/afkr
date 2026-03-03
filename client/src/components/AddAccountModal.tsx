@@ -22,6 +22,7 @@ const modalVariants = {
 };
 
 export default function AddAccountModal({ open, onClose }: Props) {
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [deviceCode, setDeviceCode] = useState<{
     user_code: string;
@@ -100,6 +101,7 @@ export default function AddAccountModal({ open, onClose }: Props) {
   }, [open, queryClient, toast]);
 
   function handleClose() {
+    setUsername('');
     setEmail('');
     setDeviceCode(null);
     setCopied(false);
@@ -110,8 +112,8 @@ export default function AddAccountModal({ open, onClose }: Props) {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!email.trim()) return;
-    mutation.mutate({ username: email.split('@')[0] ?? email, microsoft_email: email });
+    if (!username.trim() || !email.trim()) return;
+    mutation.mutate({ username: username.trim(), microsoft_email: email.trim() });
   }
 
   async function copyCode() {
@@ -170,6 +172,19 @@ export default function AddAccountModal({ open, onClose }: Props) {
                   onSubmit={handleSubmit}
                 >
                   <label className="mb-1.5 block text-xs text-subtext0">
+                    minecraft username
+                  </label>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Steve"
+                    className="mb-3 w-full text-sm"
+                    required
+                    disabled={mutation.isPending || waitingForAuth}
+                    autoFocus
+                  />
+                  <label className="mb-1.5 block text-xs text-subtext0">
                     microsoft email
                   </label>
                   <input
@@ -180,11 +195,10 @@ export default function AddAccountModal({ open, onClose }: Props) {
                     className="mb-4 w-full text-sm"
                     required
                     disabled={mutation.isPending || waitingForAuth}
-                    autoFocus
                   />
                   <motion.button
                     type="submit"
-                    disabled={mutation.isPending || waitingForAuth || !email.trim()}
+                    disabled={mutation.isPending || waitingForAuth || !username.trim() || !email.trim()}
                     whileHover={{ scale: 1.01 }}
                     whileTap={{ scale: 0.98 }}
                     className="w-full text-sm font-medium text-lavender transition-opacity hover:opacity-70 disabled:opacity-40"

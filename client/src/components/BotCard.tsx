@@ -1,4 +1,6 @@
-import { motion } from 'framer-motion';
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ChevronDown } from 'lucide-react';
 import type { BotState } from '@afkr/shared';
 import StatusIndicator from '@/components/StatusIndicator';
 
@@ -9,8 +11,10 @@ interface Props {
 }
 
 export default function BotCard({ state, username, index = 0 }: Props) {
+  const [showInventory, setShowInventory] = useState(false);
   const healthPct = Math.max(0, Math.min(100, (state.health / 20) * 100));
   const foodPct = Math.max(0, Math.min(100, (state.food / 20) * 100));
+  const items = state.inventory ?? [];
 
   return (
     <motion.div
@@ -86,9 +90,69 @@ export default function BotCard({ state, username, index = 0 }: Props) {
 
       {/* Position */}
       {state.position && (
-        <div className="text-xs text-overlay1">
+        <div className="mb-3 text-xs text-overlay1">
           {state.position.x.toFixed(0)}, {state.position.y.toFixed(0)},{' '}
           {state.position.z.toFixed(0)}
+        </div>
+      )}
+
+      {/* Inventory */}
+      {state.status === 'online' && (
+        <div>
+          <button
+            onClick={() => setShowInventory(!showInventory)}
+            className="flex w-full items-center gap-1.5 text-xs text-overlay1 transition-colors hover:text-subtext0"
+          >
+            <motion.span
+              animate={{ rotate: showInventory ? 180 : 0 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+            >
+              <ChevronDown size={12} />
+            </motion.span>
+            inventory
+            {items.length > 0 && (
+              <span className="text-overlay0">({items.length})</span>
+            )}
+          </button>
+          <AnimatePresence>
+            {showInventory && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 30, opacity: { duration: 0.15 } }}
+                className="overflow-hidden"
+              >
+                {items.length === 0 ? (
+                  <p className="py-3 text-xs text-overlay0">empty</p>
+                ) : (
+                  <div className="mt-2 grid grid-cols-9 gap-0.5">
+                    {items.map((item) => (
+                      <motion.div
+                        key={item.slot}
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: Math.min(item.slot * 0.01, 0.3) }}
+                        title={`${item.display_name ?? item.name} x${item.count}`}
+                        className="group/item relative flex aspect-square items-center justify-center bg-surface0/40 text-[9px] text-subtext0 transition-colors hover:bg-surface0"
+                      >
+                        <span className="truncate px-0.5 leading-tight">{item.name.replace(/_/g, ' ').split(' ').pop()}</span>
+                        {item.count > 1 && (
+                          <span className="absolute bottom-0 right-0.5 text-[8px] text-lavender">
+                            {item.count}
+                          </span>
+                        )}
+                        {/* Tooltip */}
+                        <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 -translate-x-1/2 whitespace-nowrap rounded bg-crust px-2 py-1 text-[10px] text-text opacity-0 shadow-lg transition-opacity group-hover/item:opacity-100">
+                          {item.display_name ?? item.name} x{item.count}
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       )}
     </motion.div>

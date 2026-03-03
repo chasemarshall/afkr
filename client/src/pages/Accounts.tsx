@@ -95,9 +95,6 @@ export default function Accounts() {
                     <span className="text-sm font-medium text-text">
                       {account.username}
                     </span>
-                    <span className="text-xs text-subtext0">
-                      {account.microsoft_email}
-                    </span>
                   </div>
                   <div className="mt-1 text-xs text-overlay1">
                     auto-reconnect:{' '}

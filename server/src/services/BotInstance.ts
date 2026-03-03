@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 import mineflayer from 'mineflayer';
 import pino from 'pino';
-import type { BotState, BotStatus, MovementDirection } from '@afkr/shared';
+import type { BotState, BotStatus, MovementDirection, InventoryItem } from '@afkr/shared';
 
 const logger = pino({ name: 'BotInstance' });
 
@@ -49,6 +49,8 @@ export class BotInstance extends EventEmitter {
   private reconnectAttempts = 0;
   private antiIdleInterval: NodeJS.Timeout | null = null;
   private antiAfkEnabled = true;
+  private antiAfkIntervalMs = 25_000;
+  private inventory: InventoryItem[] = [];
 
   public readonly accountId: string;
   public readonly ownerUserId: string;
@@ -132,6 +134,11 @@ export class BotInstance extends EventEmitter {
           }
         });
 
+        // Track inventory changes
+        this.bot.inventory.on('updateSlot', () => {
+          this.updateInventory();
+        });
+
         // Auto-accept server resource packs (required by some servers like Minehut)
         this.bot.on('resourcePack', () => {
           logger.info({ accountId: this.accountId }, 'Accepting server resource pack');
@@ -175,10 +182,24 @@ export class BotInstance extends EventEmitter {
     });
   }
 
+  private updateInventory(): void {
+    if (!this.bot) return;
+    try {
+      this.inventory = this.bot.inventory.items().map((item) => ({
+        slot: item.slot,
+        name: item.name,
+        count: item.count,
+        display_name: item.displayName || item.name,
+      }));
+      this.emit('stateChange', this.getState());
+    } catch {
+      // Ignore inventory errors during transitions
+    }
+  }
+
   private startAntiIdle(): void {
     this.stopAntiIdle();
     if (!this.antiAfkEnabled) return;
-    // Every 25s: swing arm + ~50 degree yaw rotation + jump to avoid AFK kicks
     this.antiIdleInterval = setInterval(() => {
       if (!this.bot || this.status !== 'online') return;
       try {
@@ -194,7 +215,7 @@ export class BotInstance extends EventEmitter {
       } catch {
         // Ignore errors if bot is in a bad state
       }
-    }, 25_000);
+    }, this.antiAfkIntervalMs);
   }
 
   private stopAntiIdle(): void {
@@ -204,19 +225,18 @@ export class BotInstance extends EventEmitter {
     }
   }
 
-  setAntiAfk(enabled: boolean): void {
+  setAntiAfk(enabled: boolean, intervalMs?: number): void {
     this.antiAfkEnabled = enabled;
+    if (intervalMs !== undefined) {
+      this.antiAfkIntervalMs = Math.min(Math.max(intervalMs, 5000), 120_000);
+    }
     if (enabled && this.status === 'online') {
       this.startAntiIdle();
     } else {
       this.stopAntiIdle();
     }
     this.emit('stateChange', this.getState());
-    logger.info({ accountId: this.accountId, antiAfk: enabled }, 'Anti-AFK toggled');
-  }
-
-  getAntiAfk(): boolean {
-    return this.antiAfkEnabled;
+    logger.info({ accountId: this.accountId, antiAfk: enabled, interval: this.antiAfkIntervalMs }, 'Anti-AFK updated');
   }
 
   disconnect(): void {
@@ -253,6 +273,15 @@ export class BotInstance extends EventEmitter {
     }, 300);
   }
 
+  look(yawDelta: number, pitchDelta: number): void {
+    if (!this.bot || this.status !== 'online') {
+      throw new Error('Bot is not connected');
+    }
+    const newYaw = this.bot.entity.yaw + yawDelta;
+    const newPitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.bot.entity.pitch + pitchDelta));
+    this.bot.look(newYaw, newPitch);
+  }
+
   sendCommand(cmd: string): void {
     if (!this.bot || this.status !== 'online') {
       throw new Error('Bot is not connected');
@@ -272,6 +301,8 @@ export class BotInstance extends EventEmitter {
       error: this.errorMessage,
       reconnect_attempts: this.reconnectAttempts,
       anti_afk: this.antiAfkEnabled,
+      anti_afk_interval: this.antiAfkIntervalMs,
+      inventory: this.inventory,
     };
   }
 

@@ -129,10 +129,16 @@ class BotManager extends EventEmitter {
     instance.jump();
   }
 
-  setAntiAfk(accountId: string, enabled: boolean, userId: string): void {
+  lookBot(accountId: string, yawDelta: number, pitchDelta: number, userId: string): void {
     const instance = this.getOwnedBot(accountId, userId);
     if (!instance) throw new Error('Bot not found');
-    instance.setAntiAfk(enabled);
+    instance.look(yawDelta, pitchDelta);
+  }
+
+  setAntiAfk(accountId: string, enabled: boolean, userId: string, intervalMs?: number): void {
+    const instance = this.getOwnedBot(accountId, userId);
+    if (!instance) throw new Error('Bot not found');
+    instance.setAntiAfk(enabled, intervalMs);
   }
 
   getBot(accountId: string, userId: string): BotInstance | undefined {
