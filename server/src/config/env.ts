@@ -86,6 +86,11 @@ const rawConfig = {
   // 32-byte hex key for AES-256-GCM encryption of auth tokens
   // Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
   ENCRYPTION_KEY: requireEncryptionKey('ENCRYPTION_KEY'),
+
+  // Azure AD app client ID for Microsoft/Xbox auth (MSAL device code flow).
+  // Register at https://portal.azure.com → App registrations.
+  // Enable "Allow public client flows" and add XboxLive.signin permission.
+  AZURE_CLIENT_ID: process.env.AZURE_CLIENT_ID || undefined,
 } as const;
 
 if (rawConfig.ALLOW_ADMIN_API_KEY_FALLBACK) {

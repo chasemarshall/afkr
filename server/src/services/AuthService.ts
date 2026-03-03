@@ -1,6 +1,7 @@
 import prismarineAuth from 'prismarine-auth';
 const { Authflow, Titles } = prismarineAuth;
 import pino from 'pino';
+import { config } from '../config/env.js';
 import { updateAccount, getAccountWithTokenCache } from '../db/accounts.js';
 
 const logger = pino({
@@ -69,13 +70,23 @@ class AuthService {
 
         logger.info({ accountId, email: account.microsoft_email }, 'Creating Authflow');
 
+        // Use MSAL flow with Azure AD app for reliable device code auth.
+        // The AZURE_CLIENT_ID env var should be set to your registered Azure app's client ID.
+        // Falls back to prismarine-auth's built-in default if not set.
+        const azureClientId = config.AZURE_CLIENT_ID;
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const authOptions: any = { flow: 'msal' };
+        if (azureClientId) {
+          authOptions.authTitle = azureClientId;
+        }
+
+        logger.info({ accountId, flow: 'msal', hasCustomClientId: !!azureClientId }, 'Auth flow config');
+
         const flow = new Authflow(
           account.microsoft_email,
           cacheFactory,
-          {
-            authTitle: Titles.MinecraftJava,
-            flow: 'sisu',
-          },
+          authOptions,
           (code) => {
             logger.info({ accountId, user_code: code.user_code, verification_uri: code.verification_uri }, 'Device code generated');
             onDeviceCode(code.user_code, code.verification_uri);
