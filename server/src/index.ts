@@ -181,4 +181,7 @@ httpServer.listen(config.PORT, async () => {
   // Load scheduled commands
   await schedulerService.loadSchedules();
   logger.info('Scheduler initialized');
+
+  // Restore bots that were online before last shutdown/restart
+  await botManager.restoreAll();
 });

@@ -1,4 +1,7 @@
 import { EventEmitter } from 'events';
+import { readFileSync, writeFileSync, unlinkSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import pino from 'pino';
 import { BotInstance } from './BotInstance.js';
 import { reconnectService } from './ReconnectService.js';
@@ -8,6 +11,9 @@ import { createSession, endSession } from '../db/sessions.js';
 import { logCommand } from '../db/commands.js';
 import { isAdminUserId } from '../db/ownership.js';
 import type { BotState, ChatMessage, MovementDirection } from '@afkr/shared';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const STATE_FILE = join(__dirname, '../../.bot-state.json');
 
 const logger = pino({ name: 'BotManager' });
 
@@ -154,9 +160,30 @@ class BotManager extends EventEmitter {
     return states;
   }
 
-  /** Gracefully disconnect all bots (used during shutdown). Disables reconnects first. */
+  /** Gracefully disconnect all bots (used during shutdown). Saves state for restore on restart. */
   shutdownAll(): void {
     reconnectService.disable();
+
+    // Save which bots were online so we can restore after restart
+    const activeBots: { accountId: string; serverId: string; userId: string }[] = [];
+    for (const [accountId, instance] of this.bots) {
+      if (instance.serverId) {
+        activeBots.push({
+          accountId,
+          serverId: instance.serverId,
+          userId: instance.ownerUserId,
+        });
+      }
+    }
+
+    try {
+      writeFileSync(STATE_FILE, JSON.stringify(activeBots), 'utf-8');
+      logger.info({ count: activeBots.length }, 'Saved bot state for restore');
+    } catch (err) {
+      logger.error({ err }, 'Failed to save bot state');
+    }
+
+    // Disconnect all bots
     const count = this.bots.size;
     for (const [accountId, instance] of this.bots) {
       try {
@@ -167,6 +194,32 @@ class BotManager extends EventEmitter {
       this.bots.delete(accountId);
     }
     logger.info({ count }, 'All bots disconnected for shutdown');
+  }
+
+  /** Restore bots that were online before last shutdown */
+  async restoreAll(): Promise<void> {
+    let saved: { accountId: string; serverId: string; userId: string }[];
+    try {
+      const raw = readFileSync(STATE_FILE, 'utf-8');
+      saved = JSON.parse(raw);
+      unlinkSync(STATE_FILE);
+    } catch {
+      // No state file = nothing to restore
+      return;
+    }
+
+    if (!saved || saved.length === 0) return;
+
+    logger.info({ count: saved.length }, 'Restoring bots from previous session');
+
+    for (const { accountId, serverId, userId } of saved) {
+      try {
+        await this.connectBot(accountId, serverId, userId);
+        logger.info({ accountId }, 'Bot restored successfully');
+      } catch (err) {
+        logger.error({ accountId, err }, 'Failed to restore bot');
+      }
+    }
   }
 
   private getOwnedBot(accountId: string, userId: string): BotInstance | undefined {

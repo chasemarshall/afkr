@@ -17,6 +17,9 @@ logs/
 .DS_Store
 Thumbs.db
 
+# Bot state (written on shutdown for restore)
+.bot-state.json
+
 # Auth token caches (prismarine-auth may write these)
 *.json.cache
 auth_cache/
