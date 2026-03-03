@@ -9,25 +9,18 @@ import type {
   CreateServerPayload,
   CreateSchedulePayload,
 } from '@afkr/shared';
+import { supabase } from './supabase';
 
 const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY as string | undefined;
-const ACCESS_TOKEN_STORAGE_KEY = 'afkr_access_token';
-
-function getAccessToken(): string | null {
-  try {
-    return window.localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
 
 const api = axios.create({
   baseURL: '/api',
   headers: { 'Content-Type': 'application/json' },
 });
 
-api.interceptors.request.use((requestConfig) => {
-  const token = getAccessToken();
+api.interceptors.request.use(async (requestConfig) => {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
   requestConfig.headers = requestConfig.headers ?? {};
 
   if (token) {

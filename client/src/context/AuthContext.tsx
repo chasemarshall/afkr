@@ -38,28 +38,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(s);
       setUser(s?.user ?? null);
       setLoading(false);
-
-      if (s?.access_token) {
-        localStorage.setItem('afkr_access_token', s.access_token);
-      } else {
-        localStorage.removeItem('afkr_access_token');
-      }
     });
 
     // listen for changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, s) => {
+    } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       setUser(s?.user ?? null);
       setLoading(false);
-
-      // sync access token to localStorage for api client / socket
-      if (s?.access_token) {
-        localStorage.setItem('afkr_access_token', s.access_token);
-      } else if (event === 'SIGNED_OUT') {
-        localStorage.removeItem('afkr_access_token');
-      }
     });
 
     return () => subscription.unsubscribe();
