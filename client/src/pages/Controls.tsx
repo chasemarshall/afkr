@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Send, Plug, Unplug, Plus, Trash2 } from 'lucide-react';
-import { getAccounts, getServers, getCommandHistory, createServer, deleteServer } from '@/lib/api';
+import { Loader2, Send, Plug, Unplug, Plus, Trash2, MessageSquare, Pencil, Check, X } from 'lucide-react';
+import { getAccounts, getServers, getCommandHistory, createServer, deleteServer, updateServer } from '@/lib/api';
 import { socket } from '@/lib/socket';
 import { useSocket } from '@/context/SocketContext';
 import { useToast } from '@/components/Toast';
@@ -11,6 +11,7 @@ import PageTransition from '@/components/PageTransition';
 import type { CommandHistoryEntry, Server } from '@afkr/shared';
 
 const MC_VERSIONS = [
+  '1.21.11', '1.21.10', '1.21.9', '1.21.8', '1.21.7', '1.21.6', '1.21.5',
   '1.21.4', '1.21.3', '1.21.2', '1.21.1', '1.21',
   '1.20.6', '1.20.4', '1.20.3', '1.20.2', '1.20.1', '1.20',
   '1.19.4', '1.19.3', '1.19.2', '1.19.1', '1.19',
@@ -35,9 +36,16 @@ export default function Controls() {
   const [serverHost, setServerHost] = useState('');
   const [serverPort, setServerPort] = useState('25565');
   const [serverVersion, setServerVersion] = useState('');
+  const [chatAccount, setChatAccount] = useState('');
+  const [editingServer, setEditingServer] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editHost, setEditHost] = useState('');
+  const [editPort, setEditPort] = useState('');
+  const [editVersion, setEditVersion] = useState('');
   const logRef = useRef<HTMLDivElement>(null);
+  const chatRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
-  const { botStates } = useSocket();
+  const { botStates, chatMessages } = useSocket();
   const { toast } = useToast();
 
   const { data: accounts } = useQuery({ queryKey: ['accounts'], queryFn: getAccounts });
@@ -71,11 +79,32 @@ export default function Controls() {
     onError: () => toast('failed to delete server', 'error'),
   });
 
+  const updateServerMut = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof updateServer>[1] }) =>
+      updateServer(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['servers'] });
+      toast('server updated', 'success');
+      setEditingServer(null);
+    },
+    onError: () => toast('failed to update server', 'error'),
+  });
+
+  const filteredChat = chatAccount
+    ? chatMessages.filter((m) => m.account_id === chatAccount)
+    : chatMessages;
+
   useEffect(() => {
     if (logRef.current) {
       logRef.current.scrollTop = logRef.current.scrollHeight;
     }
   }, [history]);
+
+  useEffect(() => {
+    if (chatRef.current) {
+      chatRef.current.scrollTop = chatRef.current.scrollHeight;
+    }
+  }, [filteredChat.length]);
 
   function handleConnect() {
     if (!selectedAccount || !selectedServer) {
@@ -107,6 +136,30 @@ export default function Controls() {
     socket.emit('bot:command', { account_id: cmdAccount, command: command.trim() });
     setCommand('');
     toast('command sent', 'success');
+  }
+
+  function startEditServer(s: Server) {
+    setEditingServer(s.id);
+    setEditName(s.name);
+    setEditHost(s.host);
+    setEditPort(String(s.port));
+    setEditVersion(s.version || '');
+  }
+
+  function handleSaveServer(id: string) {
+    if (!editName.trim() || !editHost.trim()) {
+      toast('name and host are required', 'error');
+      return;
+    }
+    updateServerMut.mutate({
+      id,
+      data: {
+        name: editName.trim(),
+        host: editHost.trim(),
+        port: parseInt(editPort, 10) || 25565,
+        version: editVersion || undefined,
+      },
+    });
   }
 
   function handleAddServer(e: React.FormEvent) {
@@ -239,23 +292,105 @@ export default function Controls() {
                   layout
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="group flex items-center justify-between border-b border-surface0 py-3 transition-colors duration-150 hover:bg-surface0/30"
+                  className="border-b border-surface0 py-3 transition-colors duration-150 hover:bg-surface0/30"
                 >
-                  <div>
-                    <span className="text-sm text-text">{s.name}</span>
-                    <span className="ml-3 text-xs text-overlay1">
-                      {s.host}:{s.port}
-                      {s.version && <span className="ml-2 text-lavender">v{s.version}</span>}
-                    </span>
-                  </div>
-                  <motion.button
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => deleteServerMut.mutate(s.id)}
-                    className="rounded p-1.5 text-overlay1 opacity-0 transition-all group-hover:opacity-100 hover:text-red"
-                  >
-                    <Trash2 size={14} />
-                  </motion.button>
+                  <AnimatePresence mode="wait">
+                    {editingServer === s.id ? (
+                      <motion.div
+                        key="edit"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="space-y-2"
+                      >
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            placeholder="name"
+                            className="w-full text-xs"
+                            autoFocus
+                          />
+                          <input
+                            value={editHost}
+                            onChange={(e) => setEditHost(e.target.value)}
+                            placeholder="host"
+                            className="w-full text-xs"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="number"
+                            value={editPort}
+                            onChange={(e) => setEditPort(e.target.value)}
+                            placeholder="25565"
+                            className="w-full text-xs"
+                          />
+                          <select
+                            value={editVersion}
+                            onChange={(e) => setEditVersion(e.target.value)}
+                            className="w-full text-xs"
+                          >
+                            <option value="">auto-detect</option>
+                            {MC_VERSIONS.map((v) => (
+                              <option key={v} value={v}>{v}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleSaveServer(s.id)}
+                            disabled={updateServerMut.isPending}
+                            className="inline-flex items-center gap-1 text-xs text-green transition-opacity hover:opacity-70 disabled:opacity-40"
+                          >
+                            <Check size={12} />
+                            save
+                          </button>
+                          <button
+                            onClick={() => setEditingServer(null)}
+                            className="inline-flex items-center gap-1 text-xs text-overlay1 transition-colors hover:text-text"
+                          >
+                            <X size={12} />
+                            cancel
+                          </button>
+                        </div>
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="view"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="group flex items-center justify-between"
+                      >
+                        <div>
+                          <span className="text-sm text-text">{s.name}</span>
+                          <span className="ml-3 text-xs text-overlay1">
+                            {s.host}:{s.port}
+                            {s.version && <span className="ml-2 text-lavender">v{s.version}</span>}
+                          </span>
+                        </div>
+                        <div className="flex gap-1 opacity-0 transition-all group-hover:opacity-100">
+                          <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => startEditServer(s)}
+                            className="rounded p-1.5 text-overlay1 hover:text-lavender"
+                          >
+                            <Pencil size={14} />
+                          </motion.button>
+                          <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => deleteServerMut.mutate(s.id)}
+                            className="rounded p-1.5 text-overlay1 hover:text-red"
+                          >
+                            <Trash2 size={14} />
+                          </motion.button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </motion.div>
               ))}
             </div>
@@ -378,6 +513,61 @@ export default function Controls() {
               send
             </motion.button>
           </form>
+        </motion.section>
+
+        <div className="border-t border-surface0" />
+
+        {/* Chat */}
+        <motion.section variants={sectionVariants} transition={{ type: 'spring', stiffness: 200, damping: 20 }}>
+          <div className="mb-4 flex items-center gap-3">
+            <h2 className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-subtext0">
+              <MessageSquare size={12} />
+              chat
+            </h2>
+            <select
+              value={chatAccount}
+              onChange={(e) => setChatAccount(e.target.value)}
+              className="text-xs"
+            >
+              <option value="">all accounts</option>
+              {accounts?.map((a) => (
+                <option key={a.id} value={a.id}>{a.username}</option>
+              ))}
+            </select>
+          </div>
+          <div
+            ref={chatRef}
+            className="max-h-72 overflow-y-auto"
+          >
+            {filteredChat.length === 0 ? (
+              <p className="py-8 text-center text-xs text-overlay1">no chat messages yet</p>
+            ) : (
+              <div>
+                {filteredChat.map((msg, i) => {
+                  const account = accounts?.find((a) => a.id === msg.account_id);
+                  return (
+                    <div
+                      key={`${msg.timestamp}-${i}`}
+                      className={`flex gap-3 px-3 py-1.5 text-xs ${
+                        i % 2 === 0 ? 'bg-transparent' : 'bg-surface0/30'
+                      }`}
+                    >
+                      <span className="shrink-0 text-overlay0">
+                        {new Date(msg.timestamp).toLocaleTimeString()}
+                      </span>
+                      {accounts && accounts.length > 1 && (
+                        <span className="shrink-0 text-overlay1">
+                          [{account?.username ?? '?'}]
+                        </span>
+                      )}
+                      <span className="text-lavender">&lt;{msg.username ?? '?'}&gt;</span>
+                      <span className="text-text">{msg.message}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </motion.section>
 
         <div className="border-t border-surface0" />

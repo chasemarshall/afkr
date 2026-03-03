@@ -87,7 +87,8 @@ class AuthService {
           account.microsoft_email,
           cacheFactory,
           authOptions,
-          (code) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (code: any) => {
             // MSAL flow returns camelCase (userCode, verificationUri)
             // Live flow returns snake_case (user_code, verification_uri)
             const userCode = code.userCode || code.user_code;

@@ -56,6 +56,9 @@ export const getServers = () =>
 export const createServer = (data: CreateServerPayload) =>
   api.post<Server>('/servers', data).then((r) => r.data);
 
+export const updateServer = (id: string, data: Partial<CreateServerPayload>) =>
+  api.put<Server>(`/servers/${id}`, data).then((r) => r.data);
+
 export const deleteServer = (id: string) =>
   api.delete(`/servers/${id}`).then((r) => r.data);
 

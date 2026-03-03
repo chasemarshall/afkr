@@ -14,6 +14,13 @@ class ReconnectService {
   async handleDisconnect(accountId: string, serverId: string, userId: string): Promise<void> {
     try {
       const key = this.getKey(accountId, userId);
+
+      // Skip if a reconnect timer is already pending for this account
+      if (this.reconnectTimers.has(key)) {
+        logger.info({ accountId }, 'Reconnect already scheduled, skipping');
+        return;
+      }
+
       const account = await getAccountById(accountId, userId);
       if (!account || !account.auto_reconnect) {
         logger.info({ accountId }, 'Auto-reconnect disabled, skipping');

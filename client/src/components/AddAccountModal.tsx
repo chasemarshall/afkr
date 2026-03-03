@@ -53,9 +53,12 @@ export default function AddAccountModal({ open, onClose }: Props) {
 
       return account;
     },
-    onError: (err: Error) => {
+    onError: (err: unknown) => {
       setWaitingForAuth(false);
-      toast(err.message || 'failed to create account', 'error');
+      // Extract meaningful error from axios response
+      const axiosErr = err as { response?: { data?: { error?: string }; status?: number } };
+      const serverMsg = axiosErr?.response?.data?.error;
+      toast(serverMsg || 'failed to create account', 'error');
     },
   });
 

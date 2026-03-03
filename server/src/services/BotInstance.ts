@@ -5,6 +5,38 @@ import type { BotState, BotStatus } from '@afkr/shared';
 
 const logger = pino({ name: 'BotInstance' });
 
+/** Extract human-readable text from mineflayer kick reason (can be string or ChatMessage object) */
+function parseKickReason(reason: unknown): string {
+  if (typeof reason === 'string') {
+    try {
+      const parsed = JSON.parse(reason);
+      return parseKickReason(parsed);
+    } catch {
+      return reason;
+    }
+  }
+  if (reason && typeof reason === 'object') {
+    const obj = reason as Record<string, unknown>;
+    // ChatMessage with .text or .value.text
+    if (typeof obj.text === 'string' && obj.text) return obj.text;
+    if (obj.value && typeof obj.value === 'object') {
+      const val = obj.value as Record<string, unknown>;
+      if (val.text && typeof val.text === 'object') {
+        const t = val.text as Record<string, unknown>;
+        if (typeof t.value === 'string') return t.value;
+      }
+      if (typeof val.text === 'string') return val.text;
+    }
+    // Try extra array
+    if (Array.isArray(obj.extra)) {
+      return obj.extra.map((e: unknown) => parseKickReason(e)).join('');
+    }
+    // Fallback: stringify
+    return JSON.stringify(reason);
+  }
+  return String(reason);
+}
+
 export class BotInstance extends EventEmitter {
   private bot: mineflayer.Bot | null = null;
   private status: BotStatus = 'offline';
@@ -106,10 +138,11 @@ export class BotInstance extends EventEmitter {
           });
         });
 
-        this.bot.on('kicked', (reason: string) => {
-          logger.warn({ accountId: this.accountId, reason }, 'Bot kicked');
-          this.setStatus('error', `Kicked: ${reason}`);
-          this.emit('disconnected', this.accountId, `Kicked: ${reason}`);
+        this.bot.on('kicked', (reason: unknown) => {
+          const parsed = parseKickReason(reason);
+          logger.warn({ accountId: this.accountId, reason: parsed }, 'Bot kicked');
+          this.setStatus('error', `kicked: ${parsed}`);
+          this.emit('disconnected', this.accountId, `kicked: ${parsed}`);
         });
 
         this.bot.on('error', (err: Error) => {

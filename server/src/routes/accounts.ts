@@ -72,8 +72,13 @@ router.post('/', async (req: Request, res: Response) => {
 
     const account = await createAccount(parsed.data, userId);
     res.status(201).json(account);
-  } catch (err) {
+  } catch (err: unknown) {
+    const e = err as Record<string, unknown>;
     logger.error({ err }, 'Failed to create account');
+    if (e.code === '23505') {
+      res.status(409).json({ error: 'An account with this email already exists' });
+      return;
+    }
     res.status(500).json({ error: 'Failed to create account' });
   }
 });
