@@ -34,13 +34,11 @@ export default function Controls() {
   const [showAddServer, setShowAddServer] = useState(false);
   const [serverName, setServerName] = useState('');
   const [serverHost, setServerHost] = useState('');
-  const [serverPort, setServerPort] = useState('25565');
   const [serverVersion, setServerVersion] = useState('');
   const [chatAccount, setChatAccount] = useState('');
   const [editingServer, setEditingServer] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editHost, setEditHost] = useState('');
-  const [editPort, setEditPort] = useState('');
   const [editVersion, setEditVersion] = useState('');
   const logRef = useRef<HTMLDivElement>(null);
   const chatRef = useRef<HTMLDivElement>(null);
@@ -63,7 +61,6 @@ export default function Controls() {
       toast('server added', 'success');
       setServerName('');
       setServerHost('');
-      setServerPort('25565');
       setServerVersion('');
       setShowAddServer(false);
     },
@@ -142,7 +139,6 @@ export default function Controls() {
     setEditingServer(s.id);
     setEditName(s.name);
     setEditHost(s.host);
-    setEditPort(String(s.port));
     setEditVersion(s.version || '');
   }
 
@@ -156,7 +152,7 @@ export default function Controls() {
       data: {
         name: editName.trim(),
         host: editHost.trim(),
-        port: parseInt(editPort, 10) || 25565,
+        port: 25565,
         version: editVersion || undefined,
       },
     });
@@ -171,7 +167,7 @@ export default function Controls() {
     createServerMut.mutate({
       name: serverName.trim(),
       host: serverHost.trim(),
-      port: parseInt(serverPort, 10) || 25565,
+      port: 25565,
       version: serverVersion || undefined,
     });
   }
@@ -245,30 +241,18 @@ export default function Controls() {
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className="mb-1.5 block text-xs text-overlay1">port</label>
-                      <input
-                        type="number"
-                        value={serverPort}
-                        onChange={(e) => setServerPort(e.target.value)}
-                        placeholder="25565"
-                        className="w-full text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1.5 block text-xs text-overlay1">version</label>
-                      <select
-                        value={serverVersion}
-                        onChange={(e) => setServerVersion(e.target.value)}
-                        className="w-full text-sm"
-                      >
-                        <option value="">auto-detect</option>
-                        {MC_VERSIONS.map((v) => (
-                          <option key={v} value={v}>{v}</option>
-                        ))}
-                      </select>
-                    </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs text-overlay1">version</label>
+                    <select
+                      value={serverVersion}
+                      onChange={(e) => setServerVersion(e.target.value)}
+                      className="w-full text-sm"
+                    >
+                      <option value="">auto-detect</option>
+                      {MC_VERSIONS.map((v) => (
+                        <option key={v} value={v}>{v}</option>
+                      ))}
+                    </select>
                   </div>
                   <motion.button
                     type="submit"
@@ -318,25 +302,16 @@ export default function Controls() {
                             className="w-full text-xs"
                           />
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <input
-                            type="number"
-                            value={editPort}
-                            onChange={(e) => setEditPort(e.target.value)}
-                            placeholder="25565"
-                            className="w-full text-xs"
-                          />
-                          <select
-                            value={editVersion}
-                            onChange={(e) => setEditVersion(e.target.value)}
-                            className="w-full text-xs"
-                          >
-                            <option value="">auto-detect</option>
-                            {MC_VERSIONS.map((v) => (
-                              <option key={v} value={v}>{v}</option>
-                            ))}
-                          </select>
-                        </div>
+                        <select
+                          value={editVersion}
+                          onChange={(e) => setEditVersion(e.target.value)}
+                          className="w-full text-xs"
+                        >
+                          <option value="">auto-detect</option>
+                          {MC_VERSIONS.map((v) => (
+                            <option key={v} value={v}>{v}</option>
+                          ))}
+                        </select>
                         <div className="flex gap-2">
                           <button
                             onClick={() => handleSaveServer(s.id)}
@@ -366,7 +341,7 @@ export default function Controls() {
                         <div>
                           <span className="text-sm text-text">{s.name}</span>
                           <span className="ml-3 text-xs text-overlay1">
-                            {s.host}:{s.port}
+                            {s.host}
                             {s.version && <span className="ml-2 text-lavender">v{s.version}</span>}
                           </span>
                         </div>
@@ -435,7 +410,7 @@ export default function Controls() {
                 <option value="">select server...</option>
                 {servers?.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.name} ({s.host}:{s.port}) {s.version ? `[${s.version}]` : ''}
+                    {s.name} ({s.host}) {s.version ? `[${s.version}]` : ''}
                   </option>
                 ))}
               </select>
