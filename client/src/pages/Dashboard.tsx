@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useSocket } from '@/context/SocketContext';
 import { getAccounts } from '@/lib/api';
 import BotCard from '@/components/BotCard';
+import Skeleton from '@/components/Skeleton';
 import PageTransition from '@/components/PageTransition';
 
 const containerVariants = {
@@ -16,9 +17,26 @@ const containerVariants = {
   },
 };
 
+function BotCardSkeleton() {
+  return (
+    <div className="border-b border-surface0 p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-3 w-14" />
+      </div>
+      <Skeleton className="h-3 w-32" />
+      <div className="space-y-2">
+        <Skeleton className="h-1 w-full rounded-full" />
+        <Skeleton className="h-1 w-full rounded-full" />
+      </div>
+      <Skeleton className="h-3 w-40" />
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { botStates } = useSocket();
-  const { data: accounts } = useQuery({ queryKey: ['accounts'], queryFn: getAccounts });
+  const { data: accounts, isLoading } = useQuery({ queryKey: ['accounts'], queryFn: getAccounts });
 
   const accountMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -56,7 +74,13 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {states.length === 0 ? (
+      {isLoading ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <BotCardSkeleton key={i} />
+          ))}
+        </div>
+      ) : states.length === 0 ? (
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}

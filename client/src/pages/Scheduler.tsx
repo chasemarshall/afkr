@@ -11,6 +11,7 @@ import {
   getServers,
 } from '@/lib/api';
 import { useToast } from '@/components/Toast';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import PageTransition from '@/components/PageTransition';
 import type { ScheduledCommand } from '@afkr/shared';
 
@@ -28,6 +29,7 @@ const itemVariants = {
 
 export default function Scheduler() {
   const [showForm, setShowForm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ScheduledCommand | null>(null);
   const [accountId, setAccountId] = useState('');
   const [serverId, setServerId] = useState('');
   const [command, setCommand] = useState('');
@@ -326,9 +328,9 @@ export default function Scheduler() {
                     <motion.button
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.9 }}
-                      onClick={() => deleteMut.mutate(sched.id)}
+                      onClick={() => setDeleteTarget(sched)}
                       disabled={deleteMut.isPending}
-                      className="rounded p-2 text-overlay1 opacity-0 transition-all group-hover:opacity-100 hover:text-red"
+                      className="rounded p-2 text-overlay1 opacity-60 transition-all hover:opacity-100 hover:text-red sm:opacity-0 sm:group-hover:opacity-100"
                     >
                       <Trash2 size={16} />
                     </motion.button>
@@ -339,6 +341,17 @@ export default function Scheduler() {
           </AnimatePresence>
         </motion.div>
       )}
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) deleteMut.mutate(deleteTarget.id);
+        }}
+        title="delete schedule"
+        message={`are you sure you want to delete the schedule for "${deleteTarget?.command}"? this cannot be undone.`}
+        confirmLabel="delete"
+        variant="danger"
+      />
     </PageTransition>
   );
 }

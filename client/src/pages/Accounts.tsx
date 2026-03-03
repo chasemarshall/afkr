@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { getAccounts, deleteAccount } from '@/lib/api';
 import type { Account } from '@afkr/shared';
 import AddAccountModal from '@/components/AddAccountModal';
+import ConfirmDialog from '@/components/ConfirmDialog';
+import Skeleton from '@/components/Skeleton';
 import { useToast } from '@/components/Toast';
 import PageTransition from '@/components/PageTransition';
 
@@ -15,6 +17,7 @@ const itemVariants = {
 
 export default function Accounts() {
   const [modalOpen, setModalOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Account | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -50,8 +53,15 @@ export default function Accounts() {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-24 text-subtext0">
-          <Loader2 size={20} className="animate-spin" />
+        <div className="space-y-0">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex items-center justify-between border-b border-surface0 py-4">
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-3 w-20" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : !accounts || accounts.length === 0 ? (
         <motion.div
@@ -106,9 +116,9 @@ export default function Accounts() {
                 <motion.button
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
-                  onClick={() => deleteMut.mutate(account.id)}
+                  onClick={() => setDeleteTarget(account)}
                   disabled={deleteMut.isPending}
-                  className="rounded p-2 text-overlay1 opacity-0 transition-all group-hover:opacity-100 hover:text-red"
+                  className="rounded p-2 text-overlay1 opacity-60 transition-all hover:opacity-100 hover:text-red sm:opacity-0 sm:group-hover:opacity-100"
                 >
                   <Trash2 size={16} />
                 </motion.button>
@@ -119,6 +129,17 @@ export default function Accounts() {
       )}
 
       <AddAccountModal open={modalOpen} onClose={() => setModalOpen(false)} />
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) deleteMut.mutate(deleteTarget.id);
+        }}
+        title="delete account"
+        message={`are you sure you want to delete "${deleteTarget?.username}"? this cannot be undone.`}
+        confirmLabel="delete"
+        variant="danger"
+      />
     </PageTransition>
   );
 }
