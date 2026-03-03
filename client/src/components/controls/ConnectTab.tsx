@@ -1,13 +1,9 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Pencil, Check, X, Plug, Unplug } from 'lucide-react';
-import { getAccounts, getServers, createServer, deleteServer, updateServer } from '@/lib/api';
-import { socket } from '@/lib/socket';
-import { useSocket } from '@/context/SocketContext';
-import { useActiveBot } from '@/context/ActiveBotContext';
+import { Plus, Trash2, Pencil, Check, X } from 'lucide-react';
+import { getServers, createServer, deleteServer, updateServer } from '@/lib/api';
 import { useToast } from '@/components/Toast';
-import StatusIndicator from '@/components/StatusIndicator';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import type { Server } from '@afkr/shared';
 
@@ -28,7 +24,6 @@ const sectionVariants = {
 };
 
 export default function ConnectTab() {
-  const { selectedAccountId, selectedServerId, setSelectedAccount, setSelectedServer } = useActiveBot();
   const [showAddServer, setShowAddServer] = useState(false);
   const [serverName, setServerName] = useState('');
   const [serverHost, setServerHost] = useState('');
@@ -39,10 +34,8 @@ export default function ConnectTab() {
   const [editVersion, setEditVersion] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<Server | null>(null);
   const queryClient = useQueryClient();
-  const { botStates } = useSocket();
   const { toast } = useToast();
 
-  const { data: accounts } = useQuery({ queryKey: ['accounts'], queryFn: getAccounts });
   const { data: servers } = useQuery({ queryKey: ['servers'], queryFn: getServers });
 
   const createServerMut = useMutation({
@@ -77,27 +70,6 @@ export default function ConnectTab() {
     },
     onError: () => toast('failed to update server', 'error'),
   });
-
-  function handleConnect(): void {
-    if (!selectedAccountId || !selectedServerId) {
-      toast('select an account and server', 'error');
-      return;
-    }
-    socket.emit('bot:connect', {
-      account_id: selectedAccountId,
-      server_id: selectedServerId,
-    });
-    toast('connecting...', 'info');
-  }
-
-  function handleDisconnect(): void {
-    if (!selectedAccountId) {
-      toast('select an account', 'error');
-      return;
-    }
-    socket.emit('bot:disconnect', selectedAccountId);
-    toast('disconnecting...', 'info');
-  }
 
   function startEditServer(s: Server): void {
     setEditingServer(s.id);
@@ -143,7 +115,6 @@ export default function ConnectTab() {
       animate="visible"
       variants={{ visible: { transition: { staggerChildren: 0.08 } } }}
     >
-      {/* Servers */}
       <motion.section variants={sectionVariants} transition={{ type: 'spring', stiffness: 200, damping: 20 }}>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xs font-medium uppercase tracking-wider text-subtext0">servers</h2>
@@ -327,81 +298,6 @@ export default function ConnectTab() {
         ) : (
           <p className="text-xs text-overlay1">no servers added yet</p>
         )}
-      </motion.section>
-
-      <div className="border-t border-surface0" />
-
-      {/* Connect */}
-      <motion.section variants={sectionVariants} transition={{ type: 'spring', stiffness: 200, damping: 20 }}>
-        <h2 className="mb-4 text-xs font-medium uppercase tracking-wider text-subtext0">connect</h2>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <label className="mb-1.5 block text-xs text-overlay1">account</label>
-            <select
-              value={selectedAccountId ?? ''}
-              onChange={(e) => setSelectedAccount(e.target.value || null)}
-              className="w-full text-sm"
-            >
-              <option value="">select account...</option>
-              {accounts?.map((a) => {
-                const state = botStates.get(a.id);
-                return (
-                  <option key={a.id} value={a.id}>
-                    {a.username} {state ? `(${state.status})` : ''}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs text-overlay1">server</label>
-            <select
-              value={selectedServerId ?? ''}
-              onChange={(e) => setSelectedServer(e.target.value || null)}
-              className="w-full text-sm"
-            >
-              <option value="">select server...</option>
-              {servers?.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.host}) {s.version ? `[${s.version}]` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {selectedAccountId && botStates.get(selectedAccountId) && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-            className="mt-3 flex items-center gap-2 text-xs text-subtext0"
-          >
-            <StatusIndicator status={botStates.get(selectedAccountId)!.status} />
-            <span>{botStates.get(selectedAccountId)!.status}</span>
-          </motion.div>
-        )}
-
-        <div className="mt-4 flex gap-3">
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={handleConnect}
-            className="inline-flex items-center gap-2 text-xs font-medium text-lavender transition-opacity hover:opacity-70"
-          >
-            <Plug size={14} />
-            connect
-          </motion.button>
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={handleDisconnect}
-            className="inline-flex items-center gap-2 text-xs font-medium text-overlay1 transition-colors hover:text-text"
-          >
-            <Unplug size={14} />
-            disconnect
-          </motion.button>
-        </div>
       </motion.section>
 
       <ConfirmDialog

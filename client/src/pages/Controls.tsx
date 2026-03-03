@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plug, Gamepad2, Terminal, MessageSquare } from 'lucide-react';
+import { Server, Gamepad2, Terminal, MessageSquare } from 'lucide-react';
 import PageTransition from '@/components/PageTransition';
 import TabStrip from '@/components/TabStrip';
 import ConnectTab from '@/components/controls/ConnectTab';
@@ -9,7 +9,7 @@ import ChatTab from '@/components/controls/ChatTab';
 import { usePersistedState } from '@/hooks/usePersistedState';
 
 const TABS = [
-  { key: 'connect', label: 'connect', icon: Plug },
+  { key: 'connect', label: 'servers', icon: Server },
   { key: 'move', label: 'move', icon: Gamepad2 },
   { key: 'command', label: 'command', icon: Terminal },
   { key: 'chat', label: 'chat', icon: MessageSquare },
