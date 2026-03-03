@@ -53,10 +53,19 @@ export async function createServer(payload: CreateServerPayload, userId: string)
 }
 
 export async function updateServer(id: string, updates: Partial<Server>, userId: string): Promise<Server> {
+  // Whitelist allowed fields — never allow id or owner_user_id to be overwritten
+  const safeUpdates: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+  if (updates.name !== undefined) safeUpdates.name = updates.name;
+  if (updates.host !== undefined) safeUpdates.host = updates.host;
+  if (updates.port !== undefined) safeUpdates.port = updates.port;
+  if (updates.version !== undefined) safeUpdates.version = updates.version;
+
   const scopedQuery = applyOwnerFilter(
     supabase
     .from('servers')
-    .update({ ...updates, updated_at: new Date().toISOString() })
+    .update(safeUpdates)
     .eq('id', id),
     userId
   );

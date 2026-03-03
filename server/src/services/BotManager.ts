@@ -18,20 +18,20 @@ class BotManager extends EventEmitter {
     if (this.bots.has(accountId)) {
       const existing = this.bots.get(accountId)!;
       if (!isAdminUserId(userId) && existing.ownerUserId !== userId) {
-        throw new Error(`Unauthorized access to bot ${accountId}`);
+        throw new Error('Unauthorized access to bot');
       }
       if (existing.getStatus() === 'online' || existing.getStatus() === 'connecting') {
-        throw new Error(`Bot for account ${accountId} is already connected`);
+        throw new Error('Bot is already connected');
       }
       existing.disconnect();
       this.bots.delete(accountId);
     }
 
     const account = await getAccountById(accountId, userId);
-    if (!account) throw new Error(`Account ${accountId} not found`);
+    if (!account) throw new Error('Account not found');
 
     const server = await getServerById(serverId, userId);
-    if (!server) throw new Error(`Server ${serverId} not found`);
+    if (!server) throw new Error('Server not found');
 
     const instance = new BotInstance(
       accountId,
@@ -84,7 +84,7 @@ class BotManager extends EventEmitter {
   disconnectBot(accountId: string, userId: string): void {
     const instance = this.getOwnedBot(accountId, userId);
     if (!instance) {
-      throw new Error(`No bot found for account ${accountId}`);
+      throw new Error('Bot not found');
     }
 
     // Cancel any pending reconnect
@@ -98,7 +98,7 @@ class BotManager extends EventEmitter {
   async sendCommand(accountId: string, cmd: string, userId: string): Promise<void> {
     const instance = this.getOwnedBot(accountId, userId);
     if (!instance) {
-      throw new Error(`No bot found for account ${accountId}`);
+      throw new Error('Bot not found');
     }
 
     instance.sendCommand(cmd);

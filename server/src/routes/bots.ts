@@ -37,7 +37,11 @@ router.post('/connect', async (req: Request, res: Response) => {
     res.json({ message: 'Bot connected', account_id: parsed.data.account_id });
   } catch (err) {
     logger.error({ err }, 'Failed to connect bot');
-    res.status(500).json({ error: (err as Error).message });
+    const msg = (err as Error).message;
+    // Only expose safe, expected error messages to clients
+    const safeMessages = ['already connected', 'not found', 'Unauthorized'];
+    const isSafe = safeMessages.some((s) => msg.includes(s));
+    res.status(isSafe ? 400 : 500).json({ error: isSafe ? msg : 'Failed to connect bot' });
   }
 });
 
@@ -55,7 +59,9 @@ router.post('/disconnect', async (req: Request, res: Response) => {
     res.json({ message: 'Bot disconnected', account_id: parsed.data.account_id });
   } catch (err) {
     logger.error({ err }, 'Failed to disconnect bot');
-    res.status(500).json({ error: (err as Error).message });
+    const msg = (err as Error).message;
+    const isSafe = msg.includes('not found');
+    res.status(isSafe ? 404 : 500).json({ error: isSafe ? msg : 'Failed to disconnect bot' });
   }
 });
 
@@ -79,7 +85,9 @@ router.post('/command', async (req: Request, res: Response) => {
     res.json({ message: 'Command sent' });
   } catch (err) {
     logger.error({ err }, 'Failed to send command');
-    res.status(500).json({ error: (err as Error).message });
+    const msg = (err as Error).message;
+    const isSafe = msg.includes('not found') || msg.includes('not connected');
+    res.status(isSafe ? 400 : 500).json({ error: isSafe ? msg : 'Failed to send command' });
   }
 });
 

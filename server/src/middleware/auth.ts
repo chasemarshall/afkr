@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'crypto';
+import { timingSafeEqual, createHmac } from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import { config } from '../config/env.js';
 import { getSupabaseUserIdFromAccessToken } from '../config/supabase.js';
@@ -16,15 +16,17 @@ declare global {
   }
 }
 
+/**
+ * Constant-time string comparison that does not leak length information.
+ * Both inputs are HMAC'd to normalize to the same length before comparison.
+ */
 function secureCompare(input: string, expected: string): boolean {
-  const inputBuffer = Buffer.from(input);
-  const expectedBuffer = Buffer.from(expected);
-
-  if (inputBuffer.length !== expectedBuffer.length) {
-    return false;
-  }
-
-  return timingSafeEqual(inputBuffer, expectedBuffer);
+  // HMAC both values with a static key to normalize length,
+  // preventing timing side-channel leaks on differing lengths.
+  const hmacKey = 'afkr-secure-compare';
+  const inputHash = createHmac('sha256', hmacKey).update(input).digest();
+  const expectedHash = createHmac('sha256', hmacKey).update(expected).digest();
+  return timingSafeEqual(inputHash, expectedHash);
 }
 
 function parseBearer(value: string | undefined): string | undefined {

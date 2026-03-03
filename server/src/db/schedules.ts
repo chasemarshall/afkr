@@ -90,10 +90,21 @@ export async function updateSchedule(
   updates: Partial<ScheduledCommand>,
   userId: string
 ): Promise<ScheduledCommand> {
+  // Whitelist allowed fields — never allow id, owner_user_id, account_id, server_id to be overwritten
+  const safeUpdates: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+  if (updates.command !== undefined) safeUpdates.command = updates.command;
+  if (updates.trigger_type !== undefined) safeUpdates.trigger_type = updates.trigger_type;
+  if (updates.trigger_value !== undefined) safeUpdates.trigger_value = updates.trigger_value;
+  if (updates.enabled !== undefined) safeUpdates.enabled = updates.enabled;
+  if (updates.last_run_at !== undefined) safeUpdates.last_run_at = updates.last_run_at;
+  if (updates.next_run_at !== undefined) safeUpdates.next_run_at = updates.next_run_at;
+
   const scopedQuery = applyOwnerFilter(
     supabase
     .from('scheduled_commands')
-    .update({ ...updates, updated_at: new Date().toISOString() })
+    .update(safeUpdates)
     .eq('id', id),
     userId
   );

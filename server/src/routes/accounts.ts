@@ -27,8 +27,8 @@ const updateAccountSchema = z.object({
   username: z.string().min(1).max(64).optional(),
   microsoft_email: z.string().email().optional(),
   auto_reconnect: z.boolean().optional(),
-  reconnect_delay_ms: z.number().int().positive().optional(),
-  max_reconnect_attempts: z.number().int().min(0).optional(),
+  reconnect_delay_ms: z.number().int().min(1000).max(300_000).optional(),
+  max_reconnect_attempts: z.number().int().min(0).max(20).optional(),
 });
 
 // GET /api/accounts
@@ -52,9 +52,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       res.status(404).json({ error: 'Account not found' });
       return;
     }
-    // Strip sensitive fields from API response
-    const { auth_token_cache: _, ...safeAccount } = account;
-    res.json(safeAccount);
+    res.json(account);
   } catch (err) {
     logger.error({ err }, 'Failed to get account');
     res.status(500).json({ error: 'Failed to get account' });

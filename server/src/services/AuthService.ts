@@ -1,8 +1,11 @@
 import { Authflow, Titles } from 'prismarine-auth';
 import pino from 'pino';
-import { updateAccount, getAccountById } from '../db/accounts.js';
+import { updateAccount, getAccountWithTokenCache } from '../db/accounts.js';
 
-const logger = pino({ name: 'AuthService' });
+const logger = pino({
+  name: 'AuthService',
+  redact: ['token', 'auth_token_cache', 'accessToken', 'refreshToken', 'password'],
+});
 
 class AuthService {
   async authenticateAccount(
@@ -10,8 +13,8 @@ class AuthService {
     userId: string,
     onDeviceCode: (userCode: string, verificationUri: string) => void
   ): Promise<string> {
-    const account = await getAccountById(accountId, userId);
-    if (!account) throw new Error(`Account ${accountId} not found`);
+    const account = await getAccountWithTokenCache(accountId, userId);
+    if (!account) throw new Error('Account not found');
 
     return new Promise<string>((resolve, reject) => {
       try {

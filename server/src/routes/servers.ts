@@ -52,14 +52,14 @@ const createServerSchema = z.object({
   name: z.string().min(1).max(128),
   host: hostSchema,
   port: z.number().int().min(1).max(65535),
-  version: z.string().optional(),
+  version: z.string().regex(/^[0-9]+\.[0-9]+(\.[0-9]+)?$/, 'version must be in format X.Y or X.Y.Z').optional(),
 });
 
 const updateServerSchema = z.object({
   name: z.string().min(1).max(128).optional(),
   host: hostSchema.optional(),
   port: z.number().int().min(1).max(65535).optional(),
-  version: z.string().nullable().optional(),
+  version: z.string().regex(/^[0-9]+\.[0-9]+(\.[0-9]+)?$/, 'version must be in format X.Y or X.Y.Z').nullable().optional(),
 });
 
 // GET /api/servers

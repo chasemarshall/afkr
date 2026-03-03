@@ -21,7 +21,22 @@ import type {
   ClientToServerEvents,
 } from '@afkr/shared';
 
-const logger = pino({ name: 'server' });
+const logger = pino({
+  name: 'server',
+  // Redact sensitive fields that could appear in serialized error objects
+  redact: ['req.headers.authorization', 'req.headers["x-api-key"]'],
+});
+
+// Prevent unhandled errors from printing stack traces with sensitive info
+process.on('uncaughtException', (err) => {
+  logger.fatal({ err: err.message }, 'Uncaught exception — shutting down');
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  const msg = reason instanceof Error ? reason.message : 'Unknown rejection';
+  logger.fatal({ reason: msg }, 'Unhandled rejection');
+});
 
 const app = express();
 app.set('trust proxy', config.TRUST_PROXY);
@@ -38,11 +53,16 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
 }));
 
-// Body parsing with size limits
-app.use(express.json({ limit: '1mb' }));
+// Body parsing with size limits — payloads in this API are small (JSON with UUIDs, short strings)
+app.use(express.json({ limit: '100kb' }));
 
 // Global rate limit: 100 requests per minute per IP
 app.use(rateLimit({ windowMs: 60_000, max: 100 }));
+
+// Health check (inside rate limit to prevent abuse)
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok' });
+});
 
 // Stricter rate limit on auth endpoints
 app.use('/api/accounts/:id/auth', rateLimit({
@@ -50,11 +70,6 @@ app.use('/api/accounts/:id/auth', rateLimit({
   max: 5,              // 5 auth attempts per 5 min
   message: 'too many auth attempts, try again later',
 }));
-
-// Health check (outside rate limit)
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
 
 // Require authenticated user for all control-plane API routes
 app.use('/api', requireUserAuth);
@@ -68,6 +83,14 @@ app.use('/api/bots/command', rateLimit({ windowMs: 60_000, max: 60 }));
 app.use('/api/bots', botsRouter);
 app.use('/api/schedules', schedulesRouter);
 
+// Global error handler — never leak stack traces or internal details to clients
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  logger.error({ err: err.message }, 'Unhandled error');
+  if (!res.headersSent) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Create HTTP + Socket.IO servers
 const httpServer = createServer(app);
 
@@ -75,6 +98,7 @@ const io = new SocketServer<ClientToServerEvents, ServerToClientEvents, never, {
   cors: {
     origin: config.CLIENT_URL,
     methods: ['GET', 'POST'],
+    credentials: true,
   },
   // Socket.IO security
   maxHttpBufferSize: 1e6, // 1MB max message size

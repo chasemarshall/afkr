@@ -96,12 +96,16 @@ export function setupSocketHandler(
         );
       } catch (err) {
         logger.error({ err }, 'Socket bot:connect failed');
+        const msg = (err as Error).message;
+        // Only expose safe error messages to the client
+        const safeMessages = ['already connected', 'not found', 'Unauthorized'];
+        const safeError = safeMessages.some((s) => msg.includes(s)) ? msg : 'Connection failed';
         socket.emit('bot:state', {
           account_id: payload.account_id,
           status: 'error',
           health: 0,
           food: 0,
-          error: (err as Error).message,
+          error: safeError,
         });
       }
     });

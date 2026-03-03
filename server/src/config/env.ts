@@ -53,6 +53,15 @@ function optionalStrongSecret(key: string, minLength: number): string | undefine
   return value;
 }
 
+function requireEncryptionKey(key: string): string {
+  const value = requireEnv(key).trim();
+  // Must be exactly 64 hex chars (32 bytes)
+  if (!/^[0-9a-f]{64}$/i.test(value)) {
+    throw new Error(`${key} must be exactly 64 hex characters (32 bytes). Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`);
+  }
+  return value;
+}
+
 function optionalUuid(key: string): string | undefined {
   const raw = process.env[key];
   if (!raw) return undefined;
@@ -76,7 +85,7 @@ const rawConfig = {
   ADMIN_FALLBACK_USER_ID: optionalUuid('ADMIN_FALLBACK_USER_ID'),
   // 32-byte hex key for AES-256-GCM encryption of auth tokens
   // Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-  ENCRYPTION_KEY: requireEnv('ENCRYPTION_KEY'),
+  ENCRYPTION_KEY: requireEncryptionKey('ENCRYPTION_KEY'),
 } as const;
 
 if (rawConfig.ALLOW_ADMIN_API_KEY_FALLBACK) {

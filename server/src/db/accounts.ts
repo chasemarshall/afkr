@@ -21,7 +21,34 @@ export async function getAllAccounts(userId: string): Promise<Account[]> {
   return data as Account[];
 }
 
+/**
+ * Get account by ID — returns PUBLIC fields only (no auth_token_cache).
+ * Use getAccountWithTokenCache() when you need the decrypted token cache internally.
+ */
 export async function getAccountById(id: string, userId: string): Promise<Account | null> {
+  const scopedQuery = applyOwnerFilter(
+    supabase
+    .from('accounts')
+    .select(PUBLIC_COLUMNS)
+    .eq('id', id),
+    userId
+  );
+
+  const { data, error } = await scopedQuery.single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw error;
+  }
+
+  return data as Account;
+}
+
+/**
+ * INTERNAL ONLY: Get account with decrypted token cache.
+ * Never expose the return value directly to API responses.
+ */
+export async function getAccountWithTokenCache(id: string, userId: string): Promise<Account | null> {
   const scopedQuery = applyOwnerFilter(
     supabase
     .from('accounts')
