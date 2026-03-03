@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutGrid, Users, Gamepad2, Clock } from 'lucide-react';
+import { LayoutGrid, Users, Gamepad2, Clock, ScrollText } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useSocket } from '@/context/SocketContext';
 import { useAuth } from '@/context/AuthContext';
@@ -12,6 +12,7 @@ const navItems = [
   { to: '/accounts', label: 'accounts', Icon: Users },
   { to: '/controls', label: 'controls', Icon: Gamepad2 },
   { to: '/scheduler', label: 'scheduler', Icon: Clock },
+  { to: '/scripts', label: 'scripts', Icon: ScrollText },
 ] as const;
 
 export default function AppShell({ children }: { children: ReactNode }) {

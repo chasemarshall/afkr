@@ -10,6 +10,7 @@ import Dashboard from '@/pages/Dashboard';
 import Accounts from '@/pages/Accounts';
 import Controls from '@/pages/Controls';
 import Scheduler from '@/pages/Scheduler';
+import Scripts from '@/pages/Scripts';
 
 function AuthenticatedApp() {
   const location = useLocation();
@@ -22,6 +23,7 @@ function AuthenticatedApp() {
           <Route path="/accounts" element={<Accounts />} />
           <Route path="/controls" element={<Controls />} />
           <Route path="/scheduler" element={<Scheduler />} />
+          <Route path="/scripts" element={<Scripts />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </AnimatePresence>

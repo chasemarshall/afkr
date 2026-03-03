@@ -332,6 +332,74 @@ export class BotInstance extends EventEmitter {
     this.bot.chat(cmd);
   }
 
+  attack(): void {
+    if (!this.bot || this.status !== 'online') {
+      throw new Error('Bot is not connected');
+    }
+    this.bot.swingArm('right');
+  }
+
+  useItem(hand: 'right' | 'left' = 'right'): void {
+    if (!this.bot || this.status !== 'online') {
+      throw new Error('Bot is not connected');
+    }
+    this.bot.activateItem(hand === 'left');
+  }
+
+  placeBlock(): void {
+    if (!this.bot || this.status !== 'online') {
+      throw new Error('Bot is not connected');
+    }
+    // Activate item on the main hand (equivalent to right-click to place)
+    this.bot.activateItem(false);
+  }
+
+  setSneaking(enabled: boolean): void {
+    if (!this.bot || this.status !== 'online') {
+      throw new Error('Bot is not connected');
+    }
+    this.bot.setControlState('sneak', enabled);
+  }
+
+  setSprinting(enabled: boolean): void {
+    if (!this.bot || this.status !== 'online') {
+      throw new Error('Bot is not connected');
+    }
+    this.bot.setControlState('sprint', enabled);
+  }
+
+  swapHands(): void {
+    if (!this.bot || this.status !== 'online') {
+      throw new Error('Bot is not connected');
+    }
+    // Swap main hand and offhand
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const swapSlot = (this.bot as any)._client;
+    if (swapSlot && typeof swapSlot.write === 'function') {
+      swapSlot.write('held_item_slot', { slotId: 40 }); // offhand slot
+    }
+  }
+
+  dropItem(slot?: number, all = false): void {
+    if (!this.bot || this.status !== 'online') {
+      throw new Error('Bot is not connected');
+    }
+    if (slot !== undefined) {
+      this.bot.tossStack(this.bot.inventory.slots[slot] as never).catch(() => { /* noop */ });
+    } else if (all) {
+      const items = this.bot.inventory.items();
+      for (const item of items) {
+        this.bot.tossStack(item as never).catch(() => { /* noop */ });
+      }
+    } else {
+      // Drop currently held item
+      const held = this.bot.heldItem;
+      if (held) {
+        this.bot.tossStack(held as never).catch(() => { /* noop */ });
+      }
+    }
+  }
+
   getState(): BotState {
     return {
       account_id: this.accountId,

@@ -141,6 +141,7 @@ export interface ServerToClientEvents {
   'bot:state': (state: BotState) => void;
   'bot:chat': (msg: ChatMessage) => void;
   'bot:all_states': (states: BotState[]) => void;
+  'bot:script_status': (data: ScriptStatusEvent) => void;
   'auth:device_code': (data: { account_id: string; user_code: string; verification_uri: string }) => void;
   'auth:complete': (data: { account_id: string; username: string }) => void;
   'auth:error': (data: { account_id: string; error: string }) => void;
@@ -177,4 +178,75 @@ export interface ClientToServerEvents {
   'bot:jump': (payload: JumpPayload) => void;
   'bot:anti_afk': (payload: AntiAfkPayload) => void;
   'bot:look': (payload: LookPayload) => void;
+  'bot:run_script': (payload: RunScriptPayload) => void;
+}
+
+// === Scripts ===
+export type ScriptAction =
+  | 'move'
+  | 'jump'
+  | 'look'
+  | 'command'
+  | 'wait'
+  | 'attack'
+  | 'use'
+  | 'place'
+  | 'sneak'
+  | 'sprint'
+  | 'swap_hands'
+  | 'drop'
+  | 'loop';
+
+export interface ScriptStep {
+  action: ScriptAction;
+  params: Record<string, unknown>;
+}
+
+export type ScriptTriggerType = 'manual' | 'interval' | 'cron';
+
+export interface Script {
+  id: string;
+  owner_user_id: string;
+  account_id: string;
+  server_id: string;
+  name: string;
+  description?: string;
+  steps: ScriptStep[];
+  enabled: boolean;
+  trigger_type: ScriptTriggerType;
+  trigger_value?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateScriptPayload {
+  account_id: string;
+  server_id: string;
+  name: string;
+  description?: string;
+  steps: ScriptStep[];
+  trigger_type: ScriptTriggerType;
+  trigger_value?: string;
+}
+
+export interface UpdateScriptPayload {
+  name?: string;
+  description?: string;
+  steps?: ScriptStep[];
+  enabled?: boolean;
+  trigger_type?: ScriptTriggerType;
+  trigger_value?: string;
+}
+
+export interface RunScriptPayload {
+  account_id: string;
+  script_id: string;
+}
+
+export interface ScriptStatusEvent {
+  account_id: string;
+  script_id: string;
+  status: 'running' | 'completed' | 'error';
+  step?: number;
+  error?: string;
 }

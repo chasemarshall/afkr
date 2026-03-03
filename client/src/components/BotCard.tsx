@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
-import { ChevronDown, X } from 'lucide-react';
+import { ChevronDown, X, Unplug } from 'lucide-react';
 import type { BotState } from '@afkr/shared';
 import { socket } from '@/lib/socket';
 import StatusIndicator from '@/components/StatusIndicator';
@@ -91,6 +91,19 @@ export default function BotCard({ state, username, index = 0 }: Props) {
             >
               <X size={10} />
               cancel
+            </motion.button>
+          )}
+          {state.status === 'online' && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => socket.emit('bot:disconnect', state.account_id)}
+              className="flex items-center gap-1 text-[10px] text-overlay1 opacity-0 transition-all hover:text-red group-hover:opacity-100"
+            >
+              <Unplug size={10} />
+              disconnect
             </motion.button>
           )}
           <StatusIndicator status={state.status} showLabel />

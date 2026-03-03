@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Plug, Unplug, Loader2 } from 'lucide-react';
+import { Plug, Unplug, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getAccounts, getServers } from '@/lib/api';
 import { useActiveBot } from '@/context/ActiveBotContext';
@@ -31,6 +31,10 @@ export default function BotSelectorBar() {
   const isOnline = activeBotState?.status === 'online';
   const isConnecting = activeBotState?.status === 'connecting';
 
+  const onlineCount = Array.from(botStates.values()).filter(
+    (s) => s.status === 'online'
+  ).length;
+
   function handleConnect() {
     if (!selectedAccountId || !selectedServerId) {
       toast('select an account and server', 'error');
@@ -51,17 +55,24 @@ export default function BotSelectorBar() {
 
   return (
     <div className="flex items-center gap-3 border-b border-surface0/50 bg-mantle/50 px-4 py-2 lg:px-6">
+      {/* Active bot label */}
+      <span className="hidden text-[10px] text-overlay0 sm:inline">active bot:</span>
+
       <select
         value={selectedAccountId ?? ''}
         onChange={(e) => setSelectedAccount(e.target.value || null)}
         className="max-w-[140px] truncate bg-transparent text-xs text-text outline-none"
       >
         <option value="">account...</option>
-        {accounts?.map((a) => (
-          <option key={a.id} value={a.id}>
-            {a.username}
-          </option>
-        ))}
+        {accounts?.map((a) => {
+          const state = botStates.get(a.id);
+          const statusHint = state?.status === 'online' ? ' \u2022' : '';
+          return (
+            <option key={a.id} value={a.id}>
+              {a.username}{statusHint}
+            </option>
+          );
+        })}
       </select>
 
       <span className="text-overlay0">/</span>
@@ -80,6 +91,13 @@ export default function BotSelectorBar() {
       </select>
 
       <div className="ml-auto flex items-center gap-3">
+        {/* Online count badge */}
+        {onlineCount > 0 && (
+          <span className="hidden rounded-md bg-green/10 px-1.5 py-0.5 text-[10px] text-green sm:inline">
+            {onlineCount} online
+          </span>
+        )}
+
         {activeBotState && (
           <div className="flex items-center gap-1.5">
             <StatusIndicator status={activeBotState.status} />
@@ -107,7 +125,7 @@ export default function BotSelectorBar() {
               title="cancel connection"
               className="flex items-center gap-1 text-[10px] text-yellow transition-colors hover:text-red"
             >
-              <Loader2 size={12} className="animate-spin" />
+              <X size={12} />
               <span className="hidden sm:inline">cancel</span>
             </motion.button>
           ) : (

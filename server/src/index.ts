@@ -19,6 +19,7 @@ import accountsRouter from './routes/accounts.js';
 import serversRouter from './routes/servers.js';
 import botsRouter from './routes/bots.js';
 import schedulesRouter from './routes/schedules.js';
+import scriptsRouter from './routes/scripts.js';
 import type {
   ServerToClientEvents,
   ClientToServerEvents,
@@ -96,6 +97,7 @@ app.use('/api/bots/disconnect', rateLimit({ windowMs: 60_000, max: 20 }));
 app.use('/api/bots/command', rateLimit({ windowMs: 60_000, max: 60 }));
 app.use('/api/bots', botsRouter);
 app.use('/api/schedules', schedulesRouter);
+app.use('/api/scripts', scriptsRouter);
 
 // Global error handler — never leak stack traces or internal details to clients
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

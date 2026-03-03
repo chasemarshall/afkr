@@ -4,6 +4,8 @@ import { botManager } from '../services/BotManager.js';
 import { isAdminUserId } from '../db/ownership.js';
 import { sanitizeCommand, isValidUuid } from '../middleware/validate.js';
 import { SocketEventRateLimiter } from '../middleware/socketRateLimit.js';
+import { getScriptById } from '../db/scripts.js';
+import { ScriptExecutor } from '../services/ScriptExecutor.js';
 import type {
   ServerToClientEvents,
   ClientToServerEvents,
@@ -23,6 +25,7 @@ const SOCKET_LIMITS = {
   jump: { max: 60, windowMs: 60_000 },
   antiAfk: { max: 20, windowMs: 60_000 },
   look: { max: 600, windowMs: 60_000 },
+  runScript: { max: 10, windowMs: 60_000 },
 } as const;
 
 const VALID_DIRECTIONS = new Set(['forward', 'back', 'left', 'right']);
@@ -233,6 +236,56 @@ export function setupSocketHandler(
         botManager.setAntiAfk(payload.account_id, payload.enabled, userId, interval);
       } catch (err) {
         logger.error({ err }, 'Socket bot:anti_afk failed');
+      }
+    });
+
+    // Handle bot script execution via socket
+    socket.on('bot:run_script', async (payload) => {
+      try {
+        if (!enforceRateLimit(socket.id, 'bot:run_script', SOCKET_LIMITS.runScript.max, SOCKET_LIMITS.runScript.windowMs)) {
+          return;
+        }
+        if (!payload?.account_id || !payload?.script_id) return;
+        if (!isValidUuid(payload.account_id) || !isValidUuid(payload.script_id)) return;
+
+        const script = await getScriptById(payload.script_id, userId);
+        if (!script || script.account_id !== payload.account_id) return;
+
+        const bot = botManager.getBot(payload.account_id, userId);
+        if (!bot || bot.getStatus() !== 'online') return;
+
+        const emitStatus = (status: 'running' | 'completed' | 'error', step?: number, error?: string) => {
+          for (const client of io.sockets.sockets.values()) {
+            const cid = client.data.userId;
+            if (!cid) continue;
+            if (isAdminUserId(cid) || cid === userId) {
+              client.emit('bot:script_status', {
+                account_id: payload.account_id,
+                script_id: payload.script_id,
+                status,
+                step,
+                error,
+              });
+            }
+          }
+        };
+
+        emitStatus('running', 0);
+        const executor = new ScriptExecutor();
+        executor
+          .execute(bot, script.steps, (progress) => {
+            emitStatus('running', progress.step);
+          })
+          .then(() => {
+            emitStatus('completed');
+            logger.info({ scriptId: script.id }, 'Script completed via socket');
+          })
+          .catch((err: Error) => {
+            emitStatus('error', undefined, err.message);
+            logger.error({ scriptId: script.id, err }, 'Script execution failed via socket');
+          });
+      } catch (err) {
+        logger.error({ err }, 'Socket bot:run_script failed');
       }
     });
 

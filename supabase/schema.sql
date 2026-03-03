@@ -105,6 +105,26 @@ create table if not exists command_history (
 );
 
 -- ============================================
+-- 7. scripts - automation scripts per account/server
+-- ============================================
+create table if not exists scripts (
+  id uuid primary key default uuid_generate_v4(),
+  owner_user_id uuid not null references auth.users(id) on delete cascade,
+  account_id uuid not null,
+  server_id uuid not null,
+  name text not null check (char_length(name) <= 64),
+  description text check (char_length(description) <= 256),
+  steps jsonb not null default '[]',
+  enabled boolean not null default true,
+  trigger_type text check (trigger_type in ('manual', 'interval', 'cron')),
+  trigger_value text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  foreign key (owner_user_id, account_id) references accounts(owner_user_id, id) on delete cascade,
+  foreign key (owner_user_id, server_id) references servers(owner_user_id, id) on delete cascade
+);
+
+-- ============================================
 -- Indexes for common queries
 -- ============================================
 create index if not exists idx_accounts_owner on accounts(owner_user_id);
@@ -115,6 +135,8 @@ create index if not exists idx_scheduled_commands_enabled_owner on scheduled_com
 create index if not exists idx_bot_sessions_owner on bot_sessions(owner_user_id);
 create index if not exists idx_bot_sessions_active_owner on bot_sessions(owner_user_id, account_id) where disconnected_at is null;
 create index if not exists idx_command_history_owner_executed on command_history(owner_user_id, executed_at desc);
+create index if not exists idx_scripts_owner on scripts(owner_user_id);
+create index if not exists idx_scripts_owner_account on scripts(owner_user_id, account_id);
 
 -- ============================================
 -- updated_at trigger function
@@ -142,6 +164,11 @@ create trigger scheduled_commands_updated_at
   before update on scheduled_commands
   for each row execute function update_updated_at();
 
+drop trigger if exists scripts_updated_at on scripts;
+create trigger scripts_updated_at
+  before update on scripts
+  for each row execute function update_updated_at();
+
 -- ============================================
 -- Row Level Security policies
 -- ============================================
@@ -151,6 +178,7 @@ alter table account_server_config enable row level security;
 alter table scheduled_commands enable row level security;
 alter table bot_sessions enable row level security;
 alter table command_history enable row level security;
+alter table scripts enable row level security;
 
 drop policy if exists accounts_select_own on accounts;
 create policy accounts_select_own on accounts
@@ -246,4 +274,20 @@ create policy command_history_update_own on command_history
 
 drop policy if exists command_history_delete_own on command_history;
 create policy command_history_delete_own on command_history
+  for delete using (owner_user_id = auth.uid());
+
+drop policy if exists scripts_select_own on scripts;
+create policy scripts_select_own on scripts
+  for select using (owner_user_id = auth.uid());
+
+drop policy if exists scripts_insert_own on scripts;
+create policy scripts_insert_own on scripts
+  for insert with check (owner_user_id = auth.uid());
+
+drop policy if exists scripts_update_own on scripts;
+create policy scripts_update_own on scripts
+  for update using (owner_user_id = auth.uid()) with check (owner_user_id = auth.uid());
+
+drop policy if exists scripts_delete_own on scripts;
+create policy scripts_delete_own on scripts
   for delete using (owner_user_id = auth.uid());

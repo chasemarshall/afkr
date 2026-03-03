@@ -82,20 +82,33 @@ export default function CommandTab() {
     >
       {/* Command input */}
       <div>
-        <h2 className="mb-4 text-xs font-medium uppercase tracking-wider text-subtext0">command</h2>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-xs font-medium uppercase tracking-wider text-subtext0">command</h2>
+          {selectedAccountId ? (
+            <span className="text-xs text-lavender">
+              sending to: {accounts?.find((a) => a.id === selectedAccountId)?.username ?? 'unknown'}
+            </span>
+          ) : (
+            <span className="text-xs text-yellow">
+              select an account in the top bar
+            </span>
+          )}
+        </div>
         <form onSubmit={handleSendCommand} className="flex flex-col gap-3 sm:flex-row">
           <input
             type="text"
             value={command}
             onChange={(e) => setCommand(e.target.value)}
-            placeholder="/say hello"
-            className="w-full flex-1 text-sm"
+            placeholder={selectedAccountId ? '/say hello' : 'select an account first...'}
+            disabled={!selectedAccountId}
+            className="w-full flex-1 text-sm disabled:opacity-40"
           />
           <motion.button
             type="submit"
+            disabled={!selectedAccountId}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            className="inline-flex items-center justify-center gap-2 text-xs font-medium text-lavender transition-opacity hover:opacity-70"
+            className="inline-flex items-center justify-center gap-2 text-xs font-medium text-lavender transition-opacity hover:opacity-70 disabled:opacity-40"
           >
             <Send size={14} />
             send

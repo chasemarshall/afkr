@@ -256,7 +256,7 @@ export default function AddAccountModal({ open, onClose }: Props) {
                     open microsoft login
                     <ExternalLink size={12} />
                   </a>
-                  <div className="mt-4 flex flex-col items-center gap-2">
+                  <div className="mt-4 flex flex-col items-center gap-3">
                     <div className="flex items-center gap-2 text-xs text-subtext0">
                       <Loader2 size={12} className="animate-spin" />
                       waiting for authentication...
@@ -264,6 +264,14 @@ export default function AddAccountModal({ open, onClose }: Props) {
                     <p className="text-[11px] text-overlay0">
                       enter the code above, then sign in with your microsoft account
                     </p>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleClose}
+                      className="mt-1 text-xs text-overlay1 transition-colors hover:text-red"
+                    >
+                      cancel
+                    </motion.button>
                   </div>
                 </motion.div>
               )}
