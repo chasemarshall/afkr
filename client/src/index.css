@@ -1,0 +1,136 @@
+@import "tailwindcss";
+
+@theme {
+  /* Catppuccin Mocha */
+  --color-base: #1e1e2e;
+  --color-mantle: #181825;
+  --color-crust: #11111b;
+  --color-surface0: #313244;
+  --color-surface1: #45475a;
+  --color-surface2: #585b70;
+  --color-overlay0: #6c7086;
+  --color-overlay1: #7f849c;
+  --color-overlay2: #9399b2;
+  --color-subtext0: #a6adc8;
+  --color-subtext1: #bac2de;
+  --color-text: #cdd6f4;
+  --color-lavender: #b4befe;
+  --color-blue: #89b4fa;
+  --color-sapphire: #74c7ec;
+  --color-green: #a6e3a1;
+  --color-yellow: #f9e2af;
+  --color-peach: #fab387;
+  --color-red: #f38ba8;
+  --color-mauve: #cba6f7;
+  --color-pink: #f5c2e7;
+  --color-teal: #94e2d5;
+
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--color-base);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  margin: 0;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface1);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-surface2);
+}
+
+/* Global input styling — borderless, transparent, bottom-line only */
+input,
+select,
+textarea {
+  font-family: var(--font-mono);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-surface1);
+  border-radius: 0;
+  color: var(--color-text);
+  padding: 0.5rem 0;
+  font-size: 0.875rem;
+  transition: border-color 0.2s ease;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-bottom-color: var(--color-lavender);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-overlay0);
+}
+
+/* Select arrow — custom chevron */
+select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236c7086' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0 center;
+  padding-right: 1.25rem;
+  cursor: pointer;
+}
+
+select:focus {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23b4befe' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+select option {
+  background: var(--color-mantle);
+  color: var(--color-text);
+}
+
+/* Number input — hide spinner */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Subtle pulse animation for status dots */
+@keyframes subtle-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.animate-subtle-pulse {
+  animation: subtle-pulse 2s ease-in-out infinite;
+}
+
+/* Selection color */
+::selection {
+  background-color: var(--color-lavender);
+  color: var(--color-crust);
+}

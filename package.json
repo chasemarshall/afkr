@@ -1,0 +1,20 @@
+{
+  "name": "afkr",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel dev",
+    "dev:client": "pnpm --filter client dev",
+    "dev:server": "pnpm --filter server dev",
+    "build": "pnpm --filter shared build && pnpm --parallel --filter !shared build",
+    "lint": "pnpm --parallel lint"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"],
+    "overrides": {
+      "@xboxreplay/xboxlive-auth>axios": "0.30.3"
+    }
+  }
+}
