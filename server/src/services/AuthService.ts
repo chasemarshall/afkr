@@ -8,20 +8,38 @@ const logger = pino({
   redact: ['token', 'auth_token_cache', 'accessToken', 'refreshToken', 'password'],
 });
 
+// 10 minute timeout for device code flow (Microsoft codes expire after 15 min)
+const AUTH_TIMEOUT_MS = 10 * 60 * 1000;
+
 class AuthService {
   async authenticateAccount(
     accountId: string,
     userId: string,
     onDeviceCode: (userCode: string, verificationUri: string) => void
   ): Promise<string> {
+    logger.info({ accountId }, 'Starting authentication flow');
+
     const account = await getAccountWithTokenCache(accountId, userId);
     if (!account) throw new Error('Account not found');
 
     return new Promise<string>((resolve, reject) => {
+      let settled = false;
+
+      // Timeout: reject if auth takes too long (device code expired, etc.)
+      const timeout = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          logger.error({ accountId }, 'Authentication timed out after 10 minutes');
+          reject(new Error('Authentication timed out'));
+        }
+      }, AUTH_TIMEOUT_MS);
+
       try {
         const tokenCache: Record<string, unknown> = account.auth_token_cache
           ? JSON.parse(account.auth_token_cache)
           : {};
+
+        logger.info({ accountId, hasCachedTokens: Object.keys(tokenCache).length > 0 }, 'Token cache state');
 
         const cacheFactory = ({ cacheName }: { cacheName: string }) => ({
           async getCached(): Promise<unknown> {
@@ -49,6 +67,8 @@ class AuthService {
           },
         });
 
+        logger.info({ accountId, email: account.microsoft_email }, 'Creating Authflow');
+
         const flow = new Authflow(
           account.microsoft_email,
           cacheFactory,
@@ -58,32 +78,49 @@ class AuthService {
             deviceType: 'Win32',
           },
           (code) => {
-            logger.info({ accountId }, 'Device code generated');
+            logger.info({ accountId, user_code: code.user_code, verification_uri: code.verification_uri }, 'Device code generated');
             onDeviceCode(code.user_code, code.verification_uri);
           }
         );
 
+        logger.info({ accountId }, 'Calling getMinecraftJavaToken...');
+
         flow
           .getMinecraftJavaToken()
-          .then(async () => {
+          .then(async (token) => {
+            if (settled) return;
+            clearTimeout(timeout);
+
+            logger.info({ accountId, hasToken: !!token }, 'getMinecraftJavaToken resolved');
+
             // Store the token cache
             try {
                await updateAccount(accountId, {
                  auth_token_cache: JSON.stringify(tokenCache),
                }, userId);
+               logger.info({ accountId }, 'Token cache stored in database');
             } catch (err) {
               logger.error({ accountId, error: (err as Error).message }, 'Failed to store token cache');
             }
 
+            settled = true;
             logger.info({ accountId }, 'Authentication complete');
             resolve(account.username);
           })
           .catch((err) => {
-            logger.error({ accountId, error: (err as Error).message }, 'Authentication failed');
+            if (settled) return;
+            clearTimeout(timeout);
+            settled = true;
+            logger.error({ accountId, error: (err as Error).message }, 'getMinecraftJavaToken failed');
             reject(err);
           });
       } catch (err) {
-        reject(err);
+        if (!settled) {
+          clearTimeout(timeout);
+          settled = true;
+          logger.error({ accountId, error: (err as Error).message }, 'Authflow construction failed');
+          reject(err);
+        }
       }
     });
   }

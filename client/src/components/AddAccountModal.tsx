@@ -239,9 +239,14 @@ export default function AddAccountModal({ open, onClose }: Props) {
                     open microsoft login
                     <ExternalLink size={12} />
                   </a>
-                  <div className="mt-4 flex items-center justify-center gap-2 text-xs text-subtext0">
-                    <Loader2 size={12} className="animate-spin" />
-                    waiting for authentication...
+                  <div className="mt-4 flex flex-col items-center gap-2">
+                    <div className="flex items-center gap-2 text-xs text-subtext0">
+                      <Loader2 size={12} className="animate-spin" />
+                      waiting for authentication...
+                    </div>
+                    <p className="text-[11px] text-overlay0">
+                      enter the code above, then sign in with your microsoft account
+                    </p>
                   </div>
                 </motion.div>
               )}
