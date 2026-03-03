@@ -1,6 +1,11 @@
 import { EventEmitter } from 'events';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import mineflayer from 'mineflayer';
+import prismarineAuth from 'prismarine-auth';
+const { Titles } = prismarineAuth;
 import pino from 'pino';
+import { config } from '../config/env.js';
 import type { BotState, BotStatus, MovementDirection, InventoryItem } from '@afkr/shared';
 
 const logger = pino({ name: 'BotInstance' });
@@ -97,13 +102,24 @@ export class BotInstance extends EventEmitter {
       try {
         this.setStatus('connecting');
 
+        // Per-account cache folder so mineflayer/prismarine-auth can persist tokens on disk
+        const __dirname = path.dirname(fileURLToPath(import.meta.url));
+        const profilesFolder = path.join(__dirname, '..', '..', '.bot-cache', this.accountId);
+
+        const azureClientId = config.AZURE_CLIENT_ID;
+
         const botOptions: mineflayer.BotOptions = {
           host: this.serverHost,
           port: this.serverPort,
           username: this.accountId,
           auth: 'microsoft' as const,
           version: this.version || undefined,
-        };
+          profilesFolder,
+          // Pass auth config so mineflayer uses the same flow as AuthService
+          ...(azureClientId
+            ? { flow: 'msal', authTitle: azureClientId }
+            : { flow: 'sisu', authTitle: Titles.MinecraftJava, deviceType: 'Win32' }),
+        } as mineflayer.BotOptions & Record<string, unknown>;
 
         this.bot = mineflayer.createBot(botOptions);
 

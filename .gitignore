@@ -21,6 +21,7 @@ Thumbs.db
 *.json.cache
 auth_cache/
 nmp-cache/
+.bot-cache/
 
 # IDE
 .idea/
