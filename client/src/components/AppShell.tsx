@@ -3,9 +3,10 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSocket } from '@/context/SocketContext';
+import { useAuth } from '@/context/AuthContext';
 
 const navItems = [
-  { to: '/', label: 'dashboard' },
+  { to: '/dashboard', label: 'dashboard' },
   { to: '/accounts', label: 'accounts' },
   { to: '/controls', label: 'controls' },
   { to: '/scheduler', label: 'scheduler' },
@@ -13,6 +14,7 @@ const navItems = [
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const { isConnected } = useSocket();
+  const { signOut } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
 
@@ -54,15 +56,14 @@ export default function AppShell({ children }: { children: ReactNode }) {
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4">
           {navItems.map((item, i) => {
-            const isActive = item.to === '/'
-              ? location.pathname === '/'
-              : location.pathname.startsWith(item.to);
+            const isActive = location.pathname === item.to ||
+              (item.to !== '/dashboard' && location.pathname.startsWith(item.to));
 
             return (
               <NavLink
                 key={item.to}
                 to={item.to}
-                end={item.to === '/'}
+                end
                 onClick={() => setMobileOpen(false)}
                 className="relative flex items-center px-3 py-2.5 text-sm transition-colors duration-150"
               >
@@ -96,26 +97,34 @@ export default function AppShell({ children }: { children: ReactNode }) {
           })}
         </nav>
 
-        {/* Connection status */}
+        {/* Connection status + sign out */}
         <div className="border-t border-surface0 px-6 py-4">
-          <div className="flex items-center gap-2 text-xs">
-            <motion.span
-              className="inline-block h-2 w-2 rounded-full"
-              style={{
-                backgroundColor: isConnected ? '#a6e3a1' : '#f38ba8',
-              }}
-              animate={{
-                scale: isConnected ? [1, 1.2, 1] : 1,
-              }}
-              transition={{
-                duration: 2,
-                repeat: isConnected ? Infinity : 0,
-                ease: 'easeInOut',
-              }}
-            />
-            <span className={isConnected ? 'text-green' : 'text-red'}>
-              {isConnected ? 'connected' : 'disconnected'}
-            </span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs">
+              <motion.span
+                className="inline-block h-2 w-2 rounded-full"
+                style={{
+                  backgroundColor: isConnected ? '#a6e3a1' : '#f38ba8',
+                }}
+                animate={{
+                  scale: isConnected ? [1, 1.2, 1] : 1,
+                }}
+                transition={{
+                  duration: 2,
+                  repeat: isConnected ? Infinity : 0,
+                  ease: 'easeInOut',
+                }}
+              />
+              <span className={isConnected ? 'text-green' : 'text-red'}>
+                {isConnected ? 'connected' : 'disconnected'}
+              </span>
+            </div>
+            <button
+              onClick={() => signOut()}
+              className="text-[11px] text-overlay0 transition-colors hover:text-red"
+            >
+              sign out
+            </button>
           </div>
         </div>
       </aside>

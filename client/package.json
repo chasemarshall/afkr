@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@afkr/shared": "workspace:*",
+    "@supabase/supabase-js": "^2.98.0",
     "@tanstack/react-query": "^5.62.0",
     "axios": "^1.7.9",
     "clsx": "^2.1.1",

@@ -1,7 +1,30 @@
 node_modules/
 dist/
+
+# Environment files — NEVER commit secrets
 .env
-.env.local
+.env.*
+!.env.example
+
+# Logs
 *.log
+logs/
+
+# Build artifacts
 *.tsbuildinfo
+
+# OS files
 .DS_Store
+Thumbs.db
+
+# Auth token caches (prismarine-auth may write these)
+*.json.cache
+auth_cache/
+nmp-cache/
+
+# IDE
+.idea/
+.vscode/settings.json
+
+# Coverage
+coverage/
