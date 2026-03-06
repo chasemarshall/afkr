@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Trash2 } from 'lucide-react';
-import { getAccounts, deleteAccount } from '@/lib/api';
+import { Trash2, Crown } from 'lucide-react';
+import { getAccounts, deleteAccount, updateAccount } from '@/lib/api';
 import type { Account } from '@afkr/shared';
 import AddAccountModal from '@/components/AddAccountModal';
 import ConfirmDialog from '@/components/ConfirmDialog';
@@ -36,6 +36,29 @@ export default function Accounts() {
       toast('failed to delete account', 'error');
     },
   });
+
+  const mainAccountMut = useMutation({
+    mutationFn: async ({ id, isMain }: { id: string; isMain: boolean }) => {
+      // If setting as main, unset any other main accounts first
+      if (isMain && accounts) {
+        const others = accounts.filter((a) => a.is_main_account && a.id !== id);
+        await Promise.all(others.map((a) => updateAccount(a.id, { is_main_account: false })));
+      }
+      return updateAccount(id, { is_main_account: isMain });
+    },
+    onSuccess: (_, { isMain }) => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      toast(isMain ? 'set as main account' : 'unset main account', 'success');
+    },
+    onError: () => {
+      toast('failed to update main account', 'error');
+    },
+  });
+
+  function handleToggleMain(account: Account) {
+    const isMain = !account.is_main_account;
+    mainAccountMut.mutate({ id: account.id, isMain });
+  }
 
   return (
     <PageTransition>
@@ -101,27 +124,51 @@ export default function Accounts() {
                 className="group flex items-center justify-between border-b border-surface0 py-4 transition-colors duration-150 hover:bg-surface0/30"
               >
                 <div className="flex-1">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    {account.is_main_account && (
+                      <Crown size={14} className="text-yellow" />
+                    )}
                     <span className="text-sm font-medium text-text">
                       {account.username}
                     </span>
                   </div>
-                  <div className="mt-1 text-xs text-overlay1">
-                    auto-reconnect:{' '}
-                    <span className={account.auto_reconnect ? 'text-green' : 'text-overlay0'}>
-                      {account.auto_reconnect ? 'on' : 'off'}
+                  <div className="mt-1 flex items-center gap-3 text-xs text-overlay1">
+                    <span>
+                      auto-reconnect:{' '}
+                      <span className={account.auto_reconnect ? 'text-green' : 'text-overlay0'}>
+                        {account.auto_reconnect ? 'on' : 'off'}
+                      </span>
                     </span>
+                    {account.is_main_account && (
+                      <span className="text-yellow">main</span>
+                    )}
                   </div>
                 </div>
-                <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => setDeleteTarget(account)}
-                  disabled={deleteMut.isPending}
-                  className="rounded p-2 text-overlay1 opacity-60 transition-all hover:opacity-100 hover:text-red sm:opacity-0 sm:group-hover:opacity-100"
-                >
-                  <Trash2 size={16} />
-                </motion.button>
+                <div className="flex items-center gap-1">
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => handleToggleMain(account)}
+                    disabled={mainAccountMut.isPending}
+                    title={account.is_main_account ? 'unset main account' : 'set as main account'}
+                    className={`rounded p-2 transition-all ${
+                      account.is_main_account
+                        ? 'text-yellow opacity-100'
+                        : 'text-overlay1 opacity-60 hover:opacity-100 hover:text-yellow sm:opacity-0 sm:group-hover:opacity-100'
+                    }`}
+                  >
+                    <Crown size={14} />
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => setDeleteTarget(account)}
+                    disabled={deleteMut.isPending}
+                    className="rounded p-2 text-overlay1 opacity-60 transition-all hover:opacity-100 hover:text-red sm:opacity-0 sm:group-hover:opacity-100"
+                  >
+                    <Trash2 size={16} />
+                  </motion.button>
+                </div>
               </motion.div>
             ))}
           </AnimatePresence>

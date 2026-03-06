@@ -110,9 +110,18 @@ export default function BotCard({ state, username, index = 0 }: Props) {
         </div>
       </div>
 
-      {/* Server */}
-      {state.server_name && (
-        <p className="mb-3 text-xs text-subtext0">{state.server_name}</p>
+      {/* Server + badges */}
+      {(state.server_name || state.auto_click_chat) && (
+        <div className="mb-3 flex items-center gap-2">
+          {state.server_name && (
+            <span className="text-xs text-subtext0">{state.server_name}</span>
+          )}
+          {state.auto_click_chat && (
+            <span className="rounded bg-lavender/15 px-1.5 py-0.5 text-[10px] text-lavender">
+              auto-click
+            </span>
+          )}
+        </div>
       )}
 
       {/* Error */}

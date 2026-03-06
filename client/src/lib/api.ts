@@ -46,6 +46,9 @@ export const getAccounts = () =>
 export const createAccount = (data: CreateAccountPayload) =>
   api.post<Account>('/accounts', data).then((r) => r.data);
 
+export const updateAccount = (id: string, data: Partial<Account>) =>
+  api.put<Account>(`/accounts/${id}`, data).then((r) => r.data);
+
 export const deleteAccount = (id: string) =>
   api.delete(`/accounts/${id}`).then((r) => r.data);
 

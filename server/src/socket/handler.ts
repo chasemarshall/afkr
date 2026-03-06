@@ -21,11 +21,12 @@ const SOCKET_LIMITS = {
   connect: { max: 12, windowMs: 60_000 },
   disconnect: { max: 24, windowMs: 60_000 },
   command: { max: 90, windowMs: 60_000 },
-  move: { max: 120, windowMs: 60_000 },
-  jump: { max: 60, windowMs: 60_000 },
+  move: { max: 600, windowMs: 60_000 },
+  jump: { max: 300, windowMs: 60_000 },
   antiAfk: { max: 20, windowMs: 60_000 },
   look: { max: 600, windowMs: 60_000 },
   runScript: { max: 10, windowMs: 60_000 },
+  autoClickChat: { max: 20, windowMs: 60_000 },
 } as const;
 
 const VALID_DIRECTIONS = new Set(['forward', 'back', 'left', 'right']);
@@ -236,6 +237,20 @@ export function setupSocketHandler(
         botManager.setAntiAfk(payload.account_id, payload.enabled, userId, interval);
       } catch (err) {
         logger.error({ err }, 'Socket bot:anti_afk failed');
+      }
+    });
+
+    // Handle auto-click chat toggle
+    socket.on('bot:auto_click_chat', (payload) => {
+      try {
+        if (!enforceRateLimit(socket.id, 'bot:auto_click_chat', SOCKET_LIMITS.autoClickChat.max, SOCKET_LIMITS.autoClickChat.windowMs)) {
+          return;
+        }
+        if (!payload?.account_id || typeof payload.enabled !== 'boolean') return;
+        if (!isValidUuid(payload.account_id)) return;
+        botManager.setAutoClickChat(payload.account_id, payload.enabled, userId);
+      } catch (err) {
+        logger.error({ err }, 'Socket bot:auto_click_chat failed');
       }
     });
 

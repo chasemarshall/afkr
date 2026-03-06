@@ -68,6 +68,10 @@ export default function MoveTab() {
     socket.emit('bot:anti_afk', { account_id: accountId, enabled: true, interval_ms: intervalMs });
   }
 
+  function handleToggleAutoClick(accountId: string, enabled: boolean): void {
+    socket.emit('bot:auto_click_chat', { account_id: accountId, enabled });
+  }
+
   // Mouse look: accumulate deltas and send throttled
   function flushLook(): void {
     const { yaw, pitch } = lookAccum.current;
@@ -231,6 +235,38 @@ export default function MoveTab() {
                       </motion.div>
                     )}
                   </AnimatePresence>
+                </div>
+              );
+            })}
+            {(!accounts || accounts.filter((a) => botStates.get(a.id)?.status === 'online').length === 0) && (
+              <p className="text-xs text-overlay0">no bots online</p>
+            )}
+          </div>
+
+          {/* Auto-click chat toggles */}
+          <div className="space-y-1.5">
+            <span className="block text-xs text-overlay1">auto-click chat</span>
+            {accounts?.filter((a) => botStates.get(a.id)?.status === 'online').map((a) => {
+              const state = botStates.get(a.id);
+              const isOn = state?.auto_click_chat === true;
+              return (
+                <div key={a.id} className="flex items-center justify-between py-1">
+                  <span className="text-xs text-subtext0">{a.username}</span>
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => handleToggleAutoClick(a.id, !isOn)}
+                    className={`relative h-5 w-9 rounded-full transition-colors duration-200 ${
+                      isOn ? 'bg-lavender/30' : 'bg-surface1'
+                    }`}
+                  >
+                    <motion.div
+                      animate={{ x: isOn ? 16 : 2 }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                      className={`absolute top-0.5 h-4 w-4 rounded-full transition-colors duration-200 ${
+                        isOn ? 'bg-lavender' : 'bg-overlay0'
+                      }`}
+                    />
+                  </motion.button>
                 </div>
               );
             })}
