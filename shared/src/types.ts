@@ -11,6 +11,8 @@ export interface Account {
   auto_reconnect: boolean;
   reconnect_delay_ms: number;
   max_reconnect_attempts: number;
+  is_main_account: boolean;
+  auto_click_chat: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -22,6 +24,7 @@ export interface Server {
   host: string;
   port: number;
   version?: string;
+  join_command?: string; // e.g. "/join solarskies" — auto-run on spawn & lobby detection
   created_at: string;
   updated_at: string;
 }
@@ -84,6 +87,7 @@ export interface CreateServerPayload {
   host: string;
   port: number;
   version?: string;
+  join_command?: string;
 }
 
 export interface ConnectBotPayload {
@@ -127,6 +131,7 @@ export interface BotState {
   reconnect_attempts?: number;
   anti_afk?: boolean;
   anti_afk_interval?: number;
+  auto_click_chat?: boolean;
   inventory?: InventoryItem[];
 }
 
@@ -169,6 +174,11 @@ export interface LookPayload {
   pitch_delta: number;  // radians to rotate vertically
 }
 
+export interface AutoClickChatPayload {
+  account_id: string;
+  enabled: boolean;
+}
+
 export interface ClientToServerEvents {
   'bot:connect': (payload: ConnectBotPayload) => void;
   'bot:disconnect': (account_id: string) => void;
@@ -179,6 +189,7 @@ export interface ClientToServerEvents {
   'bot:anti_afk': (payload: AntiAfkPayload) => void;
   'bot:look': (payload: LookPayload) => void;
   'bot:run_script': (payload: RunScriptPayload) => void;
+  'bot:auto_click_chat': (payload: AutoClickChatPayload) => void;
 }
 
 // === Scripts ===

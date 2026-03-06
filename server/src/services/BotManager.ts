@@ -44,7 +44,8 @@ class BotManager extends EventEmitter {
       account.owner_user_id,
       server.host,
       server.port,
-      server.version
+      server.version,
+      server.join_command
     );
     instance.serverId = serverId;
 
@@ -72,7 +73,7 @@ class BotManager extends EventEmitter {
       }
 
       // Trigger reconnect if applicable
-      reconnectService.handleDisconnect(accId, serverId, instance.ownerUserId);
+      reconnectService.handleDisconnect(accId, serverId, instance.ownerUserId, reason);
     });
 
     this.bots.set(accountId, instance);
@@ -143,6 +144,12 @@ class BotManager extends EventEmitter {
     const instance = this.getOwnedBot(accountId, userId);
     if (!instance) return;
     instance.setAntiAfk(enabled, intervalMs);
+  }
+
+  setAutoClickChat(accountId: string, enabled: boolean, userId: string): void {
+    const instance = this.getOwnedBot(accountId, userId);
+    if (!instance) return;
+    instance.setAutoClickChat(enabled);
   }
 
   getBot(accountId: string, userId: string): BotInstance | undefined {

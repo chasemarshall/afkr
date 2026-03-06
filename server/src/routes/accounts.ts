@@ -29,7 +29,9 @@ const updateAccountSchema = z.object({
   microsoft_email: z.string().email().optional(),
   auto_reconnect: z.boolean().optional(),
   reconnect_delay_ms: z.number().int().min(1000).max(300_000).optional(),
-  max_reconnect_attempts: z.number().int().min(0).max(20).optional(),
+  max_reconnect_attempts: z.number().int().min(0).max(1000).optional(),
+  is_main_account: z.boolean().optional(),
+  auto_click_chat: z.boolean().optional(),
 });
 
 // GET /api/accounts

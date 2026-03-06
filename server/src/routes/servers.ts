@@ -53,6 +53,7 @@ const createServerSchema = z.object({
   host: hostSchema,
   port: z.number().int().min(1).max(65535),
   version: z.string().regex(/^[0-9]+\.[0-9]+(\.[0-9]+)?$/, 'version must be in format X.Y or X.Y.Z').optional(),
+  join_command: z.string().min(1).max(256).optional(),
 });
 
 const updateServerSchema = z.object({
@@ -60,6 +61,7 @@ const updateServerSchema = z.object({
   host: hostSchema.optional(),
   port: z.number().int().min(1).max(65535).optional(),
   version: z.string().regex(/^[0-9]+\.[0-9]+(\.[0-9]+)?$/, 'version must be in format X.Y or X.Y.Z').nullable().optional(),
+  join_command: z.string().min(1).max(256).nullable().optional(),
 });
 
 // GET /api/servers
@@ -118,10 +120,11 @@ router.put('/:id', async (req: Request, res: Response) => {
       return;
     }
 
-    const { version, ...rest } = parsed.data;
+    const { version, join_command, ...rest } = parsed.data;
     const server = await updateServer(req.params.id, {
       ...rest,
-      ...(version !== null && { version }),
+      ...(version !== undefined && { version: version ?? undefined }),
+      ...(join_command !== undefined && { join_command: join_command ?? undefined }),
     }, userId);
     res.json(server);
   } catch (err) {

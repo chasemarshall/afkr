@@ -44,6 +44,7 @@ export async function createServer(payload: CreateServerPayload, userId: string)
       host: payload.host,
       port: payload.port,
       version: payload.version,
+      join_command: payload.join_command,
     })
     .select()
     .single();
@@ -61,6 +62,7 @@ export async function updateServer(id: string, updates: Partial<Server>, userId:
   if (updates.host !== undefined) safeUpdates.host = updates.host;
   if (updates.port !== undefined) safeUpdates.port = updates.port;
   if (updates.version !== undefined) safeUpdates.version = updates.version;
+  if (updates.join_command !== undefined) safeUpdates.join_command = updates.join_command;
 
   const scopedQuery = applyOwnerFilter(
     supabase

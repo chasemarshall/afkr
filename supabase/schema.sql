@@ -14,7 +14,9 @@ create table if not exists accounts (
   auth_token_cache text,
   auto_reconnect boolean not null default true,
   reconnect_delay_ms integer not null default 5000 check (reconnect_delay_ms > 0),
-  max_reconnect_attempts integer not null default 10 check (max_reconnect_attempts >= 0),
+  max_reconnect_attempts integer not null default 0 check (max_reconnect_attempts >= 0),
+  is_main_account boolean not null default false,
+  auto_click_chat boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (owner_user_id, microsoft_email),
@@ -31,6 +33,7 @@ create table if not exists servers (
   host text not null,
   port integer not null default 25565 check (port between 1 and 65535),
   version text,
+  join_command text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (owner_user_id, id)

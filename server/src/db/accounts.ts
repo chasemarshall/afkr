@@ -4,7 +4,7 @@ import { applyOwnerFilter } from './ownership.js';
 import type { Account, CreateAccountPayload } from '@afkr/shared';
 
 // Columns to select — never expose auth_token_cache to API consumers
-const PUBLIC_COLUMNS = 'id, owner_user_id, username, microsoft_email, auto_reconnect, reconnect_delay_ms, max_reconnect_attempts, created_at, updated_at';
+const PUBLIC_COLUMNS = 'id, owner_user_id, username, microsoft_email, auto_reconnect, reconnect_delay_ms, max_reconnect_attempts, is_main_account, auto_click_chat, created_at, updated_at';
 
 export async function getAllAccounts(userId: string): Promise<Account[]> {
   const scopedQuery = applyOwnerFilter(
@@ -86,7 +86,7 @@ export async function createAccount(payload: CreateAccountPayload, userId: strin
       microsoft_email: payload.microsoft_email,
       auto_reconnect: true,
       reconnect_delay_ms: 5000,
-      max_reconnect_attempts: 5,
+      max_reconnect_attempts: 0,
     })
     .select(PUBLIC_COLUMNS)
     .single();
@@ -106,6 +106,8 @@ export async function updateAccount(id: string, updates: Partial<Account>, userI
   if (updates.auto_reconnect !== undefined) safeUpdates.auto_reconnect = updates.auto_reconnect;
   if (updates.reconnect_delay_ms !== undefined) safeUpdates.reconnect_delay_ms = updates.reconnect_delay_ms;
   if (updates.max_reconnect_attempts !== undefined) safeUpdates.max_reconnect_attempts = updates.max_reconnect_attempts;
+  if (updates.is_main_account !== undefined) safeUpdates.is_main_account = updates.is_main_account;
+  if (updates.auto_click_chat !== undefined) safeUpdates.auto_click_chat = updates.auto_click_chat;
 
   // Encrypt token cache before storing
   if (updates.auth_token_cache !== undefined) {

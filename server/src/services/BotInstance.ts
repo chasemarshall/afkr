@@ -55,7 +55,17 @@ export class BotInstance extends EventEmitter {
   private antiIdleInterval: NodeJS.Timeout | null = null;
   private antiAfkEnabled = true;
   private antiAfkIntervalMs = 25_000;
+  private autoClickChat = false;
   private inventory: InventoryItem[] = [];
+  private joinCommand: string | undefined;
+  private lobbyHeartbeatInterval: NodeJS.Timeout | null = null;
+  /** How often to re-run the join command as a safety net (30 min) */
+  private static readonly LOBBY_HEARTBEAT_MS = 30 * 60 * 1000;
+  /** Delay before running join command after spawn */
+  private static readonly JOIN_SPAWN_DELAY_MS = 3_000;
+  /** Cooldown between lobby-triggered join commands to avoid spam */
+  private static readonly LOBBY_JOIN_COOLDOWN_MS = 10_000;
+  private lastLobbyJoinAt = 0;
 
   public readonly accountId: string;
   public readonly ownerUserId: string;
@@ -64,12 +74,26 @@ export class BotInstance extends EventEmitter {
   public serverId: string | undefined;
   private version: string | undefined;
 
+  /** Minehut lobby detection patterns (chat messages indicating the bot is in a lobby) */
+  private static readonly LOBBY_PATTERNS = [
+    /^\s*MH>/i,                          // Minehut lobby chat prefix
+    /sending you to/i,                   // "Sending you to a lobby"
+    /you have been sent to a lobby/i,
+    /server is starting/i,               // Server starting message
+    /server is restarting/i,
+    /you were moved to a lobby/i,
+    /the server you were on went down/i,
+    /server closed/i,
+    /lobby \d+/i,                        // "Lobby 1", "Lobby 2" etc.
+  ];
+
   constructor(
     accountId: string,
     ownerUserId: string,
     serverHost: string,
     serverPort: number,
-    version?: string
+    version?: string,
+    joinCommand?: string
   ) {
     super();
     this.accountId = accountId;
@@ -77,6 +101,7 @@ export class BotInstance extends EventEmitter {
     this.serverHost = serverHost;
     this.serverPort = serverPort;
     this.version = version;
+    this.joinCommand = joinCommand;
   }
 
   setSessionId(sessionId: string) {
@@ -129,6 +154,7 @@ export class BotInstance extends EventEmitter {
           this.reconnectAttempts = 0;
           this.setStatus('online');
           this.startAntiIdle();
+          this.startLobbyWatchdog();
 
           // Track inventory changes (inventory is only available after spawn)
           if (this.bot?.inventory) {
@@ -144,6 +170,21 @@ export class BotInstance extends EventEmitter {
           // Also refresh on collect events
           this.bot?.on('playerCollect', () => {
             setTimeout(() => this.updateInventory(), 100);
+          });
+
+          // Auto-click chat: execute run_command click events from chat messages
+          this.bot?.on('message', (jsonMsg: unknown) => {
+            if (!this.autoClickChat) return;
+            const commands = this.extractClickCommands(jsonMsg);
+            if (commands.length === 0) return;
+            logger.info({ accountId: this.accountId, commands }, 'Auto-clicking chat commands');
+            let delay = 0;
+            for (const cmd of commands) {
+              setTimeout(() => {
+                try { this.bot?.chat(cmd); } catch { /* noop */ }
+              }, delay);
+              delay += 500;
+            }
           });
 
           resolve();
@@ -210,6 +251,31 @@ export class BotInstance extends EventEmitter {
     });
   }
 
+  /** Walk a ChatMessage tree and extract unique run_command click event values */
+  private extractClickCommands(msg: unknown): string[] {
+    const seen = new Set<string>();
+    const commands: string[] = [];
+    function walk(node: unknown): void {
+      if (!node || typeof node !== 'object') return;
+      const obj = node as Record<string, unknown>;
+      if (obj.clickEvent && typeof obj.clickEvent === 'object') {
+        const ce = obj.clickEvent as Record<string, unknown>;
+        if (ce.action === 'run_command' && typeof ce.value === 'string' && !seen.has(ce.value)) {
+          seen.add(ce.value);
+          commands.push(ce.value);
+        }
+      }
+      if (Array.isArray(obj.extra)) {
+        for (const child of obj.extra) walk(child);
+      }
+      if (Array.isArray(obj.with)) {
+        for (const child of obj.with) walk(child);
+      }
+    }
+    walk(msg);
+    return commands;
+  }
+
   private updateInventory(): void {
     if (!this.bot) return;
     try {
@@ -237,6 +303,63 @@ export class BotInstance extends EventEmitter {
       this.emit('stateChange', this.getState());
     } catch {
       // Ignore inventory errors during transitions
+    }
+  }
+
+  /** Run the join command if set (with cooldown to avoid spam) */
+  private runJoinCommand(source: string): void {
+    if (!this.joinCommand || !this.bot || this.status !== 'online') return;
+    const now = Date.now();
+    if (now - this.lastLobbyJoinAt < BotInstance.LOBBY_JOIN_COOLDOWN_MS) return;
+    this.lastLobbyJoinAt = now;
+    logger.info({ accountId: this.accountId, source, command: this.joinCommand }, 'Running join command');
+    try {
+      this.bot.chat(this.joinCommand);
+    } catch {
+      // ignore errors if bot is in a bad state
+    }
+  }
+
+  /** Check if a chat message matches known lobby patterns */
+  private isLobbyMessage(text: string): boolean {
+    return BotInstance.LOBBY_PATTERNS.some((p) => p.test(text));
+  }
+
+  private startLobbyWatchdog(): void {
+    this.stopLobbyWatchdog();
+    if (!this.joinCommand) return;
+
+    // Run join command shortly after spawn
+    setTimeout(() => this.runJoinCommand('spawn'), BotInstance.JOIN_SPAWN_DELAY_MS);
+
+    // Periodic heartbeat: re-run join command every 30 min as safety net
+    this.lobbyHeartbeatInterval = setInterval(() => {
+      this.runJoinCommand('heartbeat');
+    }, BotInstance.LOBBY_HEARTBEAT_MS);
+
+    // Listen for lobby chat patterns
+    this.bot?.on('messagestr', (message: string) => {
+      if (this.isLobbyMessage(message)) {
+        logger.warn({ accountId: this.accountId, message }, 'Lobby detected, rejoining');
+        // Small delay to let the lobby fully load
+        setTimeout(() => this.runJoinCommand('lobby_detected'), 2_000);
+      }
+    });
+
+    // Detect dimension/world changes (proxy moving player to lobby)
+    this.bot?.on('respawn', () => {
+      if (!this.joinCommand) return;
+      logger.info({ accountId: this.accountId }, 'Respawn detected, will re-run join command');
+      setTimeout(() => this.runJoinCommand('respawn'), 3_000);
+    });
+
+    logger.info({ accountId: this.accountId, joinCommand: this.joinCommand }, 'Lobby watchdog started');
+  }
+
+  private stopLobbyWatchdog(): void {
+    if (this.lobbyHeartbeatInterval) {
+      clearInterval(this.lobbyHeartbeatInterval);
+      this.lobbyHeartbeatInterval = null;
     }
   }
 
@@ -282,8 +405,16 @@ export class BotInstance extends EventEmitter {
     logger.info({ accountId: this.accountId, antiAfk: enabled, interval: this.antiAfkIntervalMs }, 'Anti-AFK updated');
   }
 
+  setAutoClickChat(enabled: boolean): void {
+    this.autoClickChat = enabled;
+    this.emit('stateChange', this.getState());
+    logger.info({ accountId: this.accountId, autoClickChat: enabled }, 'Auto-click chat updated');
+  }
+
   disconnect(): void {
     this.stopAntiIdle();
+    this.stopLobbyWatchdog();
+    this.autoClickChat = false;
     if (this.bot) {
       this.bot.quit();
       this.bot.removeAllListeners();
@@ -413,6 +544,7 @@ export class BotInstance extends EventEmitter {
       reconnect_attempts: this.reconnectAttempts,
       anti_afk: this.antiAfkEnabled,
       anti_afk_interval: this.antiAfkIntervalMs,
+      auto_click_chat: this.autoClickChat,
       inventory: this.inventory,
     };
   }

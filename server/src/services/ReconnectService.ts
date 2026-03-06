@@ -27,7 +27,21 @@ class ReconnectService {
     logger.info('Reconnect service disabled — all pending reconnects cancelled');
   }
 
-  async handleDisconnect(accountId: string, serverId: string, userId: string): Promise<void> {
+  private static readonly MAIN_ACCOUNT_KICK_PATTERNS = [
+    'logged in from another location',
+    'you logged in from another location',
+    'duplicate login',
+  ];
+
+  private isMainAccountKick(reason: string): boolean {
+    const lower = reason.toLowerCase();
+    return ReconnectService.MAIN_ACCOUNT_KICK_PATTERNS.some((p) => lower.includes(p));
+  }
+
+  /** Max backoff delay: 5 minutes */
+  private static readonly MAX_BACKOFF_MS = 5 * 60 * 1000;
+
+  async handleDisconnect(accountId: string, serverId: string, userId: string, reason?: string): Promise<void> {
     if (this._disabled) return;
 
     try {
@@ -49,8 +63,14 @@ class ReconnectService {
           return;
         }
 
+        // Main account: skip reconnect if kicked for "logged in from another location"
+        if (account.is_main_account && reason && this.isMainAccountKick(reason)) {
+          logger.info({ accountId, reason }, 'Main account kicked by owner login, skipping reconnect');
+          return;
+        }
+
         const attempts = this.reconnectAttempts.get(key) || 0;
-        if (attempts >= account.max_reconnect_attempts) {
+        if (account.max_reconnect_attempts > 0 && attempts >= account.max_reconnect_attempts) {
           logger.warn(
             { accountId, attempts },
             'Max reconnect attempts reached'
@@ -62,10 +82,11 @@ class ReconnectService {
         const nextAttempt = attempts + 1;
         this.reconnectAttempts.set(key, nextAttempt);
 
-        // Exponential backoff: base_delay * 2^attempt
-        const delay = account.reconnect_delay_ms * Math.pow(2, attempts);
+        // Exponential backoff: base_delay * 2^attempt, capped at MAX_BACKOFF_MS
+        const rawDelay = account.reconnect_delay_ms * Math.pow(2, attempts);
+        const delay = Math.min(rawDelay, ReconnectService.MAX_BACKOFF_MS);
         logger.info(
-          { accountId, attempt: nextAttempt, delay },
+          { accountId, attempt: nextAttempt, delayMs: delay },
           'Scheduling reconnect'
         );
 
@@ -81,7 +102,9 @@ class ReconnectService {
             this.reconnectAttempts.delete(key);
             logger.info({ accountId }, 'Reconnect successful');
           } catch (err) {
-            logger.error({ accountId, err }, 'Reconnect attempt failed');
+            logger.error({ accountId, err }, 'Reconnect attempt failed, will retry');
+            // Re-trigger to schedule the next attempt
+            this.handleDisconnect(accountId, serverId, userId, reason);
           }
         }, delay);
 
