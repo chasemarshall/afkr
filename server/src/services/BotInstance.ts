@@ -1,11 +1,7 @@
 import { EventEmitter } from 'events';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import mineflayer from 'mineflayer';
-import prismarineAuth from 'prismarine-auth';
-const { Titles } = prismarineAuth;
 import pino from 'pino';
-import { config } from '../config/env.js';
+import { authenticateMinecraftClient } from './MinecraftAuth.js';
 import type { BotState, BotStatus, MovementDirection, InventoryItem } from '@afkr/shared';
 
 const logger = pino({ name: 'BotInstance' });
@@ -127,23 +123,21 @@ export class BotInstance extends EventEmitter {
       try {
         this.setStatus('connecting');
 
-        // Per-account cache folder so mineflayer/prismarine-auth can persist tokens on disk
-        const __dirname = path.dirname(fileURLToPath(import.meta.url));
-        const profilesFolder = path.join(__dirname, '..', '..', '.bot-cache', this.accountId);
-
-        const azureClientId = config.AZURE_CLIENT_ID;
-
         const botOptions: mineflayer.BotOptions = {
           host: this.serverHost,
           port: this.serverPort,
           username: this.accountId,
-          auth: 'microsoft' as const,
+          auth: (client, options) => {
+            authenticateMinecraftClient(
+              this.accountId,
+              this.ownerUserId,
+              client as unknown as Record<string, unknown>,
+              options as unknown as Record<string, unknown>
+            ).catch((err) => {
+              (client as { emit: (event: string, error: Error) => void }).emit('error', err as Error);
+            });
+          },
           version: this.version || undefined,
-          profilesFolder,
-          // Pass auth config so mineflayer uses the same flow as AuthService
-          ...(azureClientId
-            ? { flow: 'msal', authTitle: azureClientId }
-            : { flow: 'sisu', authTitle: Titles.MinecraftJava, deviceType: 'Win32' }),
         } as mineflayer.BotOptions & Record<string, unknown>;
 
         this.bot = mineflayer.createBot(botOptions);
@@ -175,7 +169,8 @@ export class BotInstance extends EventEmitter {
           // Auto-click chat: execute run_command click events from chat messages
           this.bot?.on('message', (jsonMsg: unknown) => {
             if (!this.autoClickChat) return;
-            const commands = this.extractClickCommands(jsonMsg);
+            const commands = this.extractClickCommands(jsonMsg)
+              .filter((cmd) => this.isSafeAutoClickCommand(cmd));
             if (commands.length === 0) return;
             logger.info({ accountId: this.accountId, commands }, 'Auto-clicking chat commands');
             let delay = 0;
@@ -274,6 +269,15 @@ export class BotInstance extends EventEmitter {
     }
     walk(msg);
     return commands;
+  }
+
+  private isSafeAutoClickCommand(command: string): boolean {
+    if (!this.joinCommand) {
+      return false;
+    }
+
+    const normalize = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
+    return normalize(command) === normalize(this.joinCommand);
   }
 
   private updateInventory(): void {

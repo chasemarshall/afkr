@@ -15,11 +15,13 @@ import { rateLimit } from './middleware/rateLimit.js';
 import { setupSocketHandler } from './socket/handler.js';
 import { schedulerService } from './services/SchedulerService.js';
 import { botManager } from './services/BotManager.js';
+import { scrubHistoricalCommands } from './db/commands.js';
 import accountsRouter from './routes/accounts.js';
 import serversRouter from './routes/servers.js';
 import botsRouter from './routes/bots.js';
 import schedulesRouter from './routes/schedules.js';
 import scriptsRouter from './routes/scripts.js';
+import { removeLegacyBotCache } from './lib/legacyBotCache.js';
 import type {
   ServerToClientEvents,
   ClientToServerEvents,
@@ -28,7 +30,7 @@ import type {
 const logger = pino({
   name: 'server',
   // Redact sensitive fields that could appear in serialized error objects
-  redact: ['req.headers.authorization', 'req.headers["x-api-key"]'],
+  redact: ['req.headers.authorization'],
 });
 
 // Prevent unhandled errors from printing stack traces with sensitive info
@@ -65,7 +67,7 @@ app.use(cors({
   origin: config.CLIENT_URL,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
 // Body parsing with size limits — payloads in this API are small (JSON with UUIDs, short strings)
@@ -136,12 +138,11 @@ const io = new SocketServer<ClientToServerEvents, ServerToClientEvents, never, {
 
 io.use((socket, next) => {
   const hasToken = !!socket.handshake.auth?.token;
-  const hasApiKey = !!socket.handshake.auth?.apiKey;
-  logger.info({ hasToken, hasApiKey, origin: socket.handshake.headers.origin }, 'Socket auth attempt');
+  logger.info({ hasToken, origin: socket.handshake.headers.origin }, 'Socket auth attempt');
   resolveUserIdFromSocketHandshake(socket.handshake)
     .then((userId) => {
       if (!userId) {
-        logger.warn({ hasToken, hasApiKey }, 'Socket auth rejected');
+        logger.warn({ hasToken }, 'Socket auth rejected');
         next(new Error('unauthorized'));
         return;
       }
@@ -179,6 +180,8 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 // Start server
 httpServer.listen(config.PORT, async () => {
   logger.info({ port: config.PORT }, 'Server started');
+  removeLegacyBotCache();
+  await scrubHistoricalCommands();
 
   // Load scheduled commands
   await schedulerService.loadSchedules();

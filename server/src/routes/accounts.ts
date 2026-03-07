@@ -12,6 +12,7 @@ import { authService } from '../services/AuthService.js';
 import { requireAuthenticatedUserId } from '../middleware/auth.js';
 import { validateParamId } from '../middleware/validate.js';
 import { isAdminUserId } from '../db/ownership.js';
+import { removeLegacyBotCache } from '../lib/legacyBotCache.js';
 
 const logger = pino({ name: 'routes:accounts' });
 const router = Router();
@@ -108,6 +109,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const userId = requireAuthenticatedUserId(req);
     await deleteAccount(req.params.id, userId);
+    removeLegacyBotCache(req.params.id);
     res.status(204).send();
   } catch (err) {
     logger.error({ err }, 'Failed to delete account');

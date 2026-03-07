@@ -1,6 +1,4 @@
-import { timingSafeEqual, createHmac } from 'crypto';
 import { Request, Response, NextFunction } from 'express';
-import { config } from '../config/env.js';
 import { getSupabaseUserIdFromAccessToken } from '../config/supabase.js';
 
 type SocketHandshake = {
@@ -16,19 +14,6 @@ declare global {
   }
 }
 
-/**
- * Constant-time string comparison that does not leak length information.
- * Both inputs are HMAC'd to normalize to the same length before comparison.
- */
-function secureCompare(input: string, expected: string): boolean {
-  // HMAC both values with a static key to normalize length,
-  // preventing timing side-channel leaks on differing lengths.
-  const hmacKey = 'afkr-secure-compare';
-  const inputHash = createHmac('sha256', hmacKey).update(input).digest();
-  const expectedHash = createHmac('sha256', hmacKey).update(expected).digest();
-  return timingSafeEqual(inputHash, expectedHash);
-}
-
 function parseBearer(value: string | undefined): string | undefined {
   if (!value) return undefined;
   if (!value.toLowerCase().startsWith('bearer ')) return undefined;
@@ -40,47 +25,6 @@ function getHeaderAsString(value: string | string[] | undefined): string | undef
   if (!value) return undefined;
   if (Array.isArray(value)) return value[0];
   return value;
-}
-
-function extractApiKeyFromRequest(req: Request): string | undefined {
-  const headerKey = req.header('x-api-key');
-  if (typeof headerKey === 'string' && headerKey.trim()) {
-    return headerKey.trim();
-  }
-
-  const bearer = parseBearer(req.header('authorization'));
-  if (bearer && config.ALLOW_ADMIN_API_KEY_FALLBACK) {
-    return bearer;
-  }
-
-  return undefined;
-}
-
-function extractApiKeyFromSocket(handshake: SocketHandshake): string | undefined {
-  const authKey = handshake.auth?.apiKey;
-  if (typeof authKey === 'string' && authKey.trim().length > 0) {
-    return authKey.trim();
-  }
-
-  const headerKey = getHeaderAsString(handshake.headers['x-api-key']);
-  if (typeof headerKey === 'string' && headerKey.trim().length > 0) {
-    return headerKey.trim();
-  }
-
-  const authHeader = getHeaderAsString(handshake.headers.authorization);
-  const bearer = parseBearer(authHeader);
-  if (bearer && config.ALLOW_ADMIN_API_KEY_FALLBACK) {
-    return bearer;
-  }
-
-  return undefined;
-}
-
-function isValidAdminApiKey(value: string | undefined): boolean {
-  if (!config.ALLOW_ADMIN_API_KEY_FALLBACK) return false;
-  if (!config.ADMIN_API_KEY) return false;
-  if (!value) return false;
-  return secureCompare(value, config.ADMIN_API_KEY);
 }
 
 function extractAccessTokenFromRequest(req: Request): string | undefined {
@@ -99,34 +43,24 @@ function extractAccessTokenFromSocket(handshake: SocketHandshake): string | unde
 
 export async function resolveUserIdFromRequest(req: Request): Promise<string | null> {
   const accessToken = extractAccessTokenFromRequest(req);
-  if (accessToken) {
-    const userId = await getSupabaseUserIdFromAccessToken(accessToken);
-    if (userId) return userId;
+  if (!accessToken) {
+    return null;
   }
 
-  const apiKey = extractApiKeyFromRequest(req);
-  if (isValidAdminApiKey(apiKey)) {
-    return config.ADMIN_FALLBACK_USER_ID ?? null;
-  }
-
-  return null;
+  const userId = await getSupabaseUserIdFromAccessToken(accessToken);
+  return userId ?? null;
 }
 
 export async function resolveUserIdFromSocketHandshake(
   handshake: SocketHandshake
 ): Promise<string | null> {
   const accessToken = extractAccessTokenFromSocket(handshake);
-  if (accessToken) {
-    const userId = await getSupabaseUserIdFromAccessToken(accessToken);
-    if (userId) return userId;
+  if (!accessToken) {
+    return null;
   }
 
-  const apiKey = extractApiKeyFromSocket(handshake);
-  if (isValidAdminApiKey(apiKey)) {
-    return config.ADMIN_FALLBACK_USER_ID ?? null;
-  }
-
-  return null;
+  const userId = await getSupabaseUserIdFromAccessToken(accessToken);
+  return userId ?? null;
 }
 
 export async function requireUserAuth(req: Request, res: Response, next: NextFunction): Promise<void> {

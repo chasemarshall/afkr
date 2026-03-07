@@ -35,40 +35,11 @@ function parseBoolean(value: string | undefined, defaultValue = false): boolean 
   return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
 }
 
-function requireStrongSecret(key: string, minLength: number): string {
-  const value = requireEnv(key).trim();
-  if (value.length < minLength) {
-    throw new Error(`${key} must be at least ${minLength} characters long`);
-  }
-  return value;
-}
-
-function optionalStrongSecret(key: string, minLength: number): string | undefined {
-  const raw = process.env[key];
-  if (!raw) return undefined;
-  const value = raw.trim();
-  if (value.length < minLength) {
-    throw new Error(`${key} must be at least ${minLength} characters long when set`);
-  }
-  return value;
-}
-
 function requireEncryptionKey(key: string): string {
   const value = requireEnv(key).trim();
   // Must be exactly 64 hex chars (32 bytes)
   if (!/^[0-9a-f]{64}$/i.test(value)) {
     throw new Error(`${key} must be exactly 64 hex characters (32 bytes). Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`);
-  }
-  return value;
-}
-
-function optionalUuid(key: string): string | undefined {
-  const raw = process.env[key];
-  if (!raw) return undefined;
-  const value = raw.trim();
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  if (!uuidRegex.test(value)) {
-    throw new Error(`${key} must be a valid UUID`);
   }
   return value;
 }
@@ -80,9 +51,6 @@ const rawConfig = {
   PORT: parsePort(process.env.PORT || '3001'),
   CLIENT_URL: parseClientUrl(process.env.CLIENT_URL || 'http://localhost:5173'),
   TRUST_PROXY: parseBoolean(process.env.TRUST_PROXY, false),
-  ALLOW_ADMIN_API_KEY_FALLBACK: parseBoolean(process.env.ALLOW_ADMIN_API_KEY_FALLBACK, false),
-  ADMIN_API_KEY: optionalStrongSecret('ADMIN_API_KEY', 32),
-  ADMIN_FALLBACK_USER_ID: optionalUuid('ADMIN_FALLBACK_USER_ID'),
   // 32-byte hex key for AES-256-GCM encryption of auth tokens
   // Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
   ENCRYPTION_KEY: requireEncryptionKey('ENCRYPTION_KEY'),
@@ -92,14 +60,5 @@ const rawConfig = {
   // Enable "Allow public client flows" and add XboxLive.signin permission.
   AZURE_CLIENT_ID: process.env.AZURE_CLIENT_ID || undefined,
 } as const;
-
-if (rawConfig.ALLOW_ADMIN_API_KEY_FALLBACK) {
-  if (!rawConfig.ADMIN_API_KEY) {
-    throw new Error('ADMIN_API_KEY is required when ALLOW_ADMIN_API_KEY_FALLBACK=true');
-  }
-  if (!rawConfig.ADMIN_FALLBACK_USER_ID) {
-    throw new Error('ADMIN_FALLBACK_USER_ID is required when ALLOW_ADMIN_API_KEY_FALLBACK=true');
-  }
-}
 
 export const config = rawConfig;

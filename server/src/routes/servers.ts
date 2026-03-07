@@ -1,6 +1,5 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { isIP } from 'net';
 import pino from 'pino';
 import {
   getAllServers,
@@ -11,38 +10,12 @@ import {
 } from '../db/servers.js';
 import { requireAuthenticatedUserId } from '../middleware/auth.js';
 import { validateParamId } from '../middleware/validate.js';
+import { assertPublicResolvableHost, isDisallowedHostInput } from '../lib/network.js';
 
 const logger = pino({ name: 'routes:servers' });
 const router = Router();
 
-function isDisallowedHost(rawHost: string): boolean {
-  const host = rawHost.trim().toLowerCase();
-  if (!host) return true;
-
-  if (host === 'localhost' || host.endsWith('.local')) {
-    return true;
-  }
-
-  const ipVersion = isIP(host);
-  if (ipVersion === 4) {
-    const parts = host.split('.').map((v) => Number.parseInt(v, 10));
-    const [a, b] = parts;
-    if (a === 10 || a === 127 || a === 0) return true;
-    if (a === 169 && b === 254) return true;
-    if (a === 192 && b === 168) return true;
-    if (a === 172 && b >= 16 && b <= 31) return true;
-  }
-
-  if (ipVersion === 6) {
-    if (host === '::1' || host.startsWith('fe80:') || host.startsWith('fc') || host.startsWith('fd')) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-const hostSchema = z.string().min(1).max(253).refine((value) => !isDisallowedHost(value), {
+const hostSchema = z.string().min(1).max(253).refine((value) => !isDisallowedHostInput(value), {
   message: 'host must be a public address (no localhost/private ranges)',
 });
 
@@ -102,11 +75,15 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
+    await assertPublicResolvableHost(parsed.data.host);
     const server = await createServer(parsed.data, userId);
     res.status(201).json(server);
   } catch (err) {
     logger.error({ err }, 'Failed to create server');
-    res.status(500).json({ error: 'Failed to create server' });
+    const message = (err as Error).message;
+    res.status(message.includes('host') ? 400 : 500).json({
+      error: message.includes('host') ? message : 'Failed to create server',
+    });
   }
 });
 
@@ -121,6 +98,9 @@ router.put('/:id', async (req: Request, res: Response) => {
     }
 
     const { version, join_command, ...rest } = parsed.data;
+    if (rest.host !== undefined) {
+      await assertPublicResolvableHost(rest.host);
+    }
     const server = await updateServer(req.params.id, {
       ...rest,
       ...(version !== undefined && { version: version ?? undefined }),
@@ -129,7 +109,10 @@ router.put('/:id', async (req: Request, res: Response) => {
     res.json(server);
   } catch (err) {
     logger.error({ err }, 'Failed to update server');
-    res.status(500).json({ error: 'Failed to update server' });
+    const message = (err as Error).message;
+    res.status(message.includes('host') ? 400 : 500).json({
+      error: message.includes('host') ? message : 'Failed to update server',
+    });
   }
 });
 

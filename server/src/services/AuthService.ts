@@ -1,8 +1,6 @@
-import prismarineAuth from 'prismarine-auth';
-const { Authflow, Titles } = prismarineAuth;
 import pino from 'pino';
-import { config } from '../config/env.js';
-import { updateAccount, getAccountWithTokenCache } from '../db/accounts.js';
+import { getAccountWithTokenCache } from '../db/accounts.js';
+import { createAuthflowForAccount } from './MinecraftAuth.js';
 
 const logger = pino({
   name: 'AuthService',
@@ -26,7 +24,6 @@ class AuthService {
     return new Promise<string>((resolve, reject) => {
       let settled = false;
 
-      // Timeout: reject if auth takes too long (device code expired, etc.)
       const timeout = setTimeout(() => {
         if (!settled) {
           settled = true;
@@ -35,108 +32,22 @@ class AuthService {
         }
       }, AUTH_TIMEOUT_MS);
 
-      try {
-        const tokenCache: Record<string, unknown> = account.auth_token_cache
-          ? JSON.parse(account.auth_token_cache)
-          : {};
-
-        logger.info({ accountId, hasCachedTokens: Object.keys(tokenCache).length > 0 }, 'Token cache state');
-
-        const cacheFactory = ({ cacheName }: { cacheName: string }) => ({
-          async getCached(): Promise<unknown> {
-            const existing = tokenCache[cacheName];
-            if (typeof existing === 'object' && existing !== null) {
-              return existing;
-            }
-            return {};
-          },
-          async reset(): Promise<void> {
-            tokenCache[cacheName] = {};
-          },
-          async setCached(value: unknown): Promise<void> {
-            tokenCache[cacheName] = value;
-          },
-          async setCachedPartial(value: Record<string, unknown>): Promise<void> {
-            const existing = tokenCache[cacheName];
-            const base = typeof existing === 'object' && existing !== null
-              ? (existing as Record<string, unknown>)
-              : {};
-            tokenCache[cacheName] = {
-              ...base,
-              ...value,
-            };
-          },
-        });
-
-        logger.info({ accountId, email: account.microsoft_email }, 'Creating Authflow');
-
-        // If AZURE_CLIENT_ID is set, use MSAL flow with that app ID.
-        // Otherwise, fall back to 'live' flow which uses prismarine-auth's
-        // built-in Minecraft title ID (no custom Azure app needed).
-        const azureClientId = config.AZURE_CLIENT_ID;
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const authOptions: any = azureClientId
-          ? { flow: 'msal', authTitle: azureClientId }
-          : { flow: 'sisu', authTitle: Titles.MinecraftJava, deviceType: 'Win32' };
-
-        const flowType = azureClientId ? 'msal' : 'sisu';
-        logger.info({ accountId, flow: flowType, hasCustomClientId: !!azureClientId }, 'Auth flow config');
-
-        const flow = new Authflow(
-          account.microsoft_email,
-          cacheFactory,
-          authOptions,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (code: any) => {
-            // MSAL flow returns camelCase (userCode, verificationUri)
-            // Live flow returns snake_case (user_code, verification_uri)
-            const userCode = code.userCode || code.user_code;
-            const verificationUri = code.verificationUri || code.verification_uri;
-            logger.info({ accountId, userCode, verificationUri }, 'Device code generated');
-            onDeviceCode(userCode, verificationUri);
-          }
-        );
-
-        logger.info({ accountId }, 'Calling getMinecraftJavaToken...');
-
-        flow
-          .getMinecraftJavaToken()
-          .then(async (token) => {
-            if (settled) return;
-            clearTimeout(timeout);
-
-            logger.info({ accountId, hasToken: !!token }, 'getMinecraftJavaToken resolved');
-
-            // Store the token cache
-            try {
-               await updateAccount(accountId, {
-                 auth_token_cache: JSON.stringify(tokenCache),
-               }, userId);
-               logger.info({ accountId }, 'Token cache stored in database');
-            } catch (err) {
-              logger.error({ accountId, error: (err as Error).message }, 'Failed to store token cache');
-            }
-
-            settled = true;
-            logger.info({ accountId }, 'Authentication complete');
-            resolve(account.username);
-          })
-          .catch((err) => {
-            if (settled) return;
-            clearTimeout(timeout);
-            settled = true;
-            logger.error({ accountId, error: (err as Error).message }, 'getMinecraftJavaToken failed');
-            reject(err);
-          });
-      } catch (err) {
-        if (!settled) {
+      createAuthflowForAccount(accountId, userId, onDeviceCode)
+        .then(({ flow }) => flow.getMinecraftJavaToken({ fetchProfile: true }))
+        .then(({ token, profile }) => {
+          if (settled) return;
           clearTimeout(timeout);
           settled = true;
-          logger.error({ accountId, error: (err as Error).message }, 'Authflow construction failed');
+          logger.info({ accountId, hasToken: !!token }, 'Authentication complete');
+          resolve(profile?.name || account.username);
+        })
+        .catch((err) => {
+          if (settled) return;
+          clearTimeout(timeout);
+          settled = true;
+          logger.error({ accountId, error: (err as Error).message }, 'Authentication failed');
           reject(err);
-        }
-      }
+        });
     });
   }
 }
