@@ -10,7 +10,7 @@ import { getServerById } from '../db/servers.js';
 import { createSession, endSession } from '../db/sessions.js';
 import { logCommand } from '../db/commands.js';
 import { isAdminUserId } from '../db/ownership.js';
-import { assertPublicResolvableHost } from '../lib/network.js';
+import { resolveMinecraftEndpoint } from '../lib/network.js';
 import type { BotState, ChatMessage, MovementDirection } from '@afkr/shared';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -39,13 +39,15 @@ class BotManager extends EventEmitter {
 
     const server = await getServerById(serverId, userId);
     if (!server) throw new Error('Server not found');
-    await assertPublicResolvableHost(server.host);
+    const endpoint = await resolveMinecraftEndpoint(server.host, server.port);
 
     const instance = new BotInstance(
       accountId,
       account.owner_user_id,
-      server.host,
-      server.port,
+      endpoint.effectiveHost,
+      endpoint.effectivePort,
+      endpoint.connectAddress,
+      endpoint.connectPort,
       server.version,
       server.join_command
     );

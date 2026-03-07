@@ -75,7 +75,7 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    await assertPublicResolvableHost(parsed.data.host);
+    await assertPublicResolvableHost(parsed.data.host, parsed.data.port);
     const server = await createServer(parsed.data, userId);
     res.status(201).json(server);
   } catch (err) {
@@ -91,6 +91,12 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const userId = requireAuthenticatedUserId(req);
+    const existing = await getServerById(req.params.id, userId);
+    if (!existing) {
+      res.status(404).json({ error: 'Server not found' });
+      return;
+    }
+
     const parsed = updateServerSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: 'Validation failed', details: parsed.error.issues });
@@ -98,9 +104,9 @@ router.put('/:id', async (req: Request, res: Response) => {
     }
 
     const { version, join_command, ...rest } = parsed.data;
-    if (rest.host !== undefined) {
-      await assertPublicResolvableHost(rest.host);
-    }
+    const nextHost = rest.host ?? existing.host;
+    const nextPort = rest.port ?? existing.port;
+    await assertPublicResolvableHost(nextHost, nextPort);
     const server = await updateServer(req.params.id, {
       ...rest,
       ...(version !== undefined && { version: version ?? undefined }),

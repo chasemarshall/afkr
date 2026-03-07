@@ -6,6 +6,8 @@ import { dirname, join } from 'node:path';
 
 const PORT = process.env.WEBHOOK_PORT || 9000;
 const SECRET = process.env.WEBHOOK_SECRET;
+const MAX_BODY_BYTES = 1024 * 1024;
+const REQUEST_TIMEOUT_MS = 15_000;
 
 if (!SECRET) {
   console.error('WEBHOOK_SECRET environment variable is required');
@@ -16,6 +18,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const deployScript = join(__dirname, 'deploy.sh');
 
 let deploying = false;
+
+function getHeaderAsString(value) {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value[0];
+  return undefined;
+}
 
 function verifySignature(payload, signature) {
   if (!signature) return false;
@@ -49,16 +57,49 @@ function runDeploy() {
 
 const server = createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/webhook') {
+    const contentLength = Number.parseInt(getHeaderAsString(req.headers['content-length']) || '', 10);
+    if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
+      res.writeHead(413, { Connection: 'close' });
+      res.end('payload too large', () => req.destroy());
+      return;
+    }
+
     const chunks = [];
-    req.on('data', (chunk) => chunks.push(chunk));
+    let totalBytes = 0;
+    let responded = false;
+
+    const respond = (status, body, destroy = false) => {
+      if (responded) return;
+      responded = true;
+      res.writeHead(status, { Connection: 'close' });
+      res.end(body, () => {
+        if (destroy) req.destroy();
+      });
+    };
+
+    req.on('error', () => {
+      respond(400, 'bad request');
+    });
+
+    req.on('data', (chunk) => {
+      if (responded) return;
+      totalBytes += chunk.length;
+      if (totalBytes > MAX_BODY_BYTES) {
+        respond(413, 'payload too large', true);
+        return;
+      }
+      chunks.push(chunk);
+    });
+
     req.on('end', () => {
-      const body = Buffer.concat(chunks);
-      const signature = req.headers['x-hub-signature-256'];
+      if (responded) return;
+
+      const body = Buffer.concat(chunks, totalBytes);
+      const signature = getHeaderAsString(req.headers['x-hub-signature-256']);
 
       if (!verifySignature(body, signature)) {
         console.warn('Invalid signature, rejecting');
-        res.writeHead(401);
-        res.end('unauthorized');
+        respond(401, 'unauthorized');
         return;
       }
 
@@ -66,19 +107,16 @@ const server = createServer((req, res) => {
       try {
         payload = JSON.parse(body.toString());
       } catch {
-        res.writeHead(400);
-        res.end('bad request');
+        respond(400, 'bad request');
         return;
       }
 
       if (payload.ref === 'refs/heads/main') {
         console.log(`Push to main by ${payload.pusher?.name || 'unknown'}`);
         runDeploy();
-        res.writeHead(200);
-        res.end('deploying');
+        respond(200, 'deploying');
       } else {
-        res.writeHead(200);
-        res.end('ignored (not main)');
+        respond(200, 'ignored (not main)');
       }
     });
   } else if (req.method === 'GET' && req.url === '/health') {
@@ -89,6 +127,10 @@ const server = createServer((req, res) => {
     res.end('not found');
   }
 });
+
+server.requestTimeout = REQUEST_TIMEOUT_MS;
+server.headersTimeout = REQUEST_TIMEOUT_MS + 1000;
+server.keepAliveTimeout = 5000;
 
 server.listen(PORT, () => {
   console.log(`Webhook listener running on port ${PORT}`);

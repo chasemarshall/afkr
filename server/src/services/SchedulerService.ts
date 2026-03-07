@@ -94,10 +94,7 @@ class SchedulerService {
           last_run_at: new Date().toISOString(),
         }, schedule.owner_user_id);
 
-        logger.info(
-          { scheduleId: schedule.id, command: schedule.command },
-          'Executed scheduled command'
-        );
+        logger.info({ scheduleId: schedule.id }, 'Executed scheduled command');
       } catch (err) {
         logger.error({ scheduleId: schedule.id, err }, 'Failed to execute scheduled command');
       }

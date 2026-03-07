@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+import { Socket, connect as openTcpConnection } from 'net';
 import mineflayer from 'mineflayer';
 import pino from 'pino';
 import { authenticateMinecraftClient } from './MinecraftAuth.js';
@@ -67,6 +68,8 @@ export class BotInstance extends EventEmitter {
   public readonly ownerUserId: string;
   public readonly serverHost: string;
   public readonly serverPort: number;
+  private readonly connectHost: string;
+  private readonly connectPort: number;
   public serverId: string | undefined;
   private version: string | undefined;
 
@@ -88,6 +91,8 @@ export class BotInstance extends EventEmitter {
     ownerUserId: string,
     serverHost: string,
     serverPort: number,
+    connectHost: string,
+    connectPort: number,
     version?: string,
     joinCommand?: string
   ) {
@@ -96,6 +101,8 @@ export class BotInstance extends EventEmitter {
     this.ownerUserId = ownerUserId;
     this.serverHost = serverHost;
     this.serverPort = serverPort;
+    this.connectHost = connectHost;
+    this.connectPort = connectPort;
     this.version = version;
     this.joinCommand = joinCommand;
   }
@@ -126,6 +133,9 @@ export class BotInstance extends EventEmitter {
         const botOptions: mineflayer.BotOptions = {
           host: this.serverHost,
           port: this.serverPort,
+          connect: (client: { setSocket: (socket: Socket) => void }) => {
+            client.setSocket(openTcpConnection(this.connectPort, this.connectHost));
+          },
           username: this.accountId,
           auth: (client, options) => {
             authenticateMinecraftClient(
@@ -172,7 +182,10 @@ export class BotInstance extends EventEmitter {
             const commands = this.extractClickCommands(jsonMsg)
               .filter((cmd) => this.isSafeAutoClickCommand(cmd));
             if (commands.length === 0) return;
-            logger.info({ accountId: this.accountId, commands }, 'Auto-clicking chat commands');
+            logger.info(
+              { accountId: this.accountId, count: commands.length },
+              'Auto-clicking approved chat commands'
+            );
             let delay = 0;
             for (const cmd of commands) {
               setTimeout(() => {
@@ -316,7 +329,7 @@ export class BotInstance extends EventEmitter {
     const now = Date.now();
     if (now - this.lastLobbyJoinAt < BotInstance.LOBBY_JOIN_COOLDOWN_MS) return;
     this.lastLobbyJoinAt = now;
-    logger.info({ accountId: this.accountId, source, command: this.joinCommand }, 'Running join command');
+    logger.info({ accountId: this.accountId, source }, 'Running join command');
     try {
       this.bot.chat(this.joinCommand);
     } catch {
@@ -357,7 +370,7 @@ export class BotInstance extends EventEmitter {
       setTimeout(() => this.runJoinCommand('respawn'), 3_000);
     });
 
-    logger.info({ accountId: this.accountId, joinCommand: this.joinCommand }, 'Lobby watchdog started');
+    logger.info({ accountId: this.accountId }, 'Lobby watchdog started');
   }
 
   private stopLobbyWatchdog(): void {
