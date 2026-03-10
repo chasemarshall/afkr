@@ -66,6 +66,52 @@ class BotManager extends EventEmitter {
       this.emit('bot:chat', { ownerUserId: instance.ownerUserId, message: msg });
     });
 
+    instance.on('transfer', async (target: { host: string; port: number }) => {
+      logger.info(
+        { accountId, host: target.host, port: target.port },
+        'Handling protocol transfer'
+      );
+
+      // End current session
+      const sessionId = instance.getSessionId();
+      if (sessionId) {
+        try {
+          await endSession(sessionId, instance.ownerUserId, 'protocol_transfer');
+        } catch (err) {
+          logger.error({ err }, 'Failed to end session during transfer');
+        }
+      }
+
+      // Tear down the current connection (without triggering reconnect)
+      instance.cleanupForTransfer();
+      instance.applyTransfer(target.host, target.port);
+
+      // Create new session for the transferred connection
+      try {
+        const newSession = await createSession(accountId, serverId, instance.ownerUserId);
+        instance.setSessionId(newSession.id);
+      } catch (err) {
+        logger.error({ err }, 'Failed to create session for transfer');
+      }
+
+      // Reconnect to the new address
+      try {
+        await instance.connect();
+        logger.info(
+          { accountId, host: target.host, port: target.port },
+          'Protocol transfer successful'
+        );
+      } catch (err) {
+        logger.error({ accountId, err }, 'Protocol transfer reconnect failed, falling back to normal reconnect');
+        // If transfer reconnect fails, trigger normal reconnect to original server
+        instance.applyTransfer(
+          endpoint.connectAddress,
+          endpoint.connectPort
+        );
+        reconnectService.handleDisconnect(accountId, serverId, instance.ownerUserId, 'transfer_failed');
+      }
+    });
+
     instance.on('disconnected', async (accId: string, reason: string) => {
       const sessionId = instance.getSessionId();
       if (sessionId) {

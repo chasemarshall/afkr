@@ -50,7 +50,7 @@ export class BotInstance extends EventEmitter {
   private errorMessage: string | undefined;
   private reconnectAttempts = 0;
   private antiIdleInterval: NodeJS.Timeout | null = null;
-  private antiAfkEnabled = true;
+  private antiAfkEnabled = false;
   private antiAfkIntervalMs = 25_000;
   private autoClickChat = false;
   private inventory: InventoryItem[] = [];
@@ -63,13 +63,15 @@ export class BotInstance extends EventEmitter {
   /** Cooldown between lobby-triggered join commands to avoid spam */
   private static readonly LOBBY_JOIN_COOLDOWN_MS = 10_000;
   private lastLobbyJoinAt = 0;
+  /** When true, the bot is handling a protocol transfer and should not trigger reconnect */
+  private transferring = false;
 
   public readonly accountId: string;
   public readonly ownerUserId: string;
-  public readonly serverHost: string;
-  public readonly serverPort: number;
-  private readonly connectHost: string;
-  private readonly connectPort: number;
+  public serverHost: string;
+  public serverPort: number;
+  private connectHost: string;
+  private connectPort: number;
   public serverId: string | undefined;
   private version: string | undefined;
 
@@ -133,8 +135,20 @@ export class BotInstance extends EventEmitter {
         const botOptions: mineflayer.BotOptions = {
           host: this.serverHost,
           port: this.serverPort,
-          connect: (client: { setSocket: (socket: Socket) => void }) => {
-            client.setSocket(openTcpConnection(this.connectPort, this.connectHost));
+          connect: (client: { setSocket: (socket: Socket) => void; emit: (event: string, error: Error) => void }) => {
+            const socket = openTcpConnection(this.connectPort, this.connectHost);
+            // Timeout: if TCP handshake takes longer than 10s, abort
+            socket.setTimeout(10_000, () => {
+              socket.destroy(new Error('TCP connection timed out'));
+            });
+            // Clear timeout once connected
+            socket.once('connect', () => socket.setTimeout(0));
+            // Catch socket-level errors before mineflayer initializes
+            socket.on('error', (err: Error) => {
+              logger.error({ accountId: this.accountId, err: err.message }, 'TCP socket error');
+              try { client.emit('error', err); } catch { /* noop */ }
+            });
+            client.setSocket(socket);
           },
           username: this.accountId,
           auth: (client, options) => {
@@ -151,6 +165,23 @@ export class BotInstance extends EventEmitter {
         } as mineflayer.BotOptions & Record<string, unknown>;
 
         this.bot = mineflayer.createBot(botOptions);
+
+        // Listen for protocol transfer packet (1.20.5+)
+        // Servers/proxies can send this to move a player to a different address
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const client = (this.bot as any)._client;
+        if (client && typeof client.on === 'function') {
+          client.on('transfer', (packet: { host: string; port: number }) => {
+            const host = packet.host;
+            const port = packet.port || 25565;
+            logger.info(
+              { accountId: this.accountId, host, port },
+              'Received protocol transfer packet'
+            );
+            this.transferring = true;
+            this.emit('transfer', { host, port });
+          });
+        }
 
         this.bot.once('spawn', () => {
           logger.info({ accountId: this.accountId }, 'Bot spawned');
@@ -233,6 +264,10 @@ export class BotInstance extends EventEmitter {
         });
 
         this.bot.on('kicked', (reason: unknown) => {
+          if (this.transferring) {
+            logger.info({ accountId: this.accountId }, 'Suppressed kick during protocol transfer');
+            return;
+          }
           const parsed = parseKickReason(reason);
           logger.warn({ accountId: this.accountId, reason: parsed }, 'Bot kicked');
           this.setStatus('error', `kicked: ${parsed}`);
@@ -240,12 +275,24 @@ export class BotInstance extends EventEmitter {
         });
 
         this.bot.on('error', (err: Error) => {
+          if (this.transferring) {
+            logger.warn({ accountId: this.accountId, err: err.message }, 'Error during protocol transfer');
+            // Reset flag so reconnect can recover
+            this.transferring = false;
+            this.setStatus('error', `transfer error: ${err.message}`);
+            this.emit('disconnected', this.accountId, `transfer error: ${err.message}`);
+            return;
+          }
           logger.error({ accountId: this.accountId, err }, 'Bot error');
           this.setStatus('error', err.message);
           reject(err);
         });
 
         this.bot.on('end', (reason: string) => {
+          if (this.transferring) {
+            logger.info({ accountId: this.accountId, reason }, 'Connection ended during protocol transfer (expected)');
+            return;
+          }
           logger.info({ accountId: this.accountId, reason }, 'Bot disconnected');
           if (this.status !== 'error') {
             this.setStatus('offline');
@@ -426,6 +473,28 @@ export class BotInstance extends EventEmitter {
     this.autoClickChat = enabled;
     this.emit('stateChange', this.getState());
     logger.info({ accountId: this.accountId, autoClickChat: enabled }, 'Auto-click chat updated');
+  }
+
+  /** Tear down the current connection for a protocol transfer (preserves state for reconnect) */
+  cleanupForTransfer(): void {
+    this.stopAntiIdle();
+    this.stopLobbyWatchdog();
+    if (this.bot) {
+      this.bot.quit();
+      this.bot.removeAllListeners();
+      this.bot = null;
+    }
+  }
+
+  /** Reset the transfer flag and update connection targets for the new server */
+  applyTransfer(host: string, port: number): void {
+    // Update connection targets — for transfer, connect directly to the new address
+    this.connectHost = host;
+    this.connectPort = port;
+    // Also update the logical server host/port (used by mineflayer for handshake)
+    this.serverHost = host;
+    this.serverPort = port;
+    this.transferring = false;
   }
 
   disconnect(): void {

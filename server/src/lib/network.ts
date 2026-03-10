@@ -1,6 +1,20 @@
 import { lookup, resolveSrv } from 'dns/promises';
 import { BlockList, isIP } from 'net';
 
+/** DNS operations timeout after 10 seconds to prevent indefinite hangs */
+const DNS_TIMEOUT_MS = 10_000;
+
+/** Wrap a promise with a timeout */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    promise.then(
+      (val) => { clearTimeout(timer); resolve(val); },
+      (err) => { clearTimeout(timer); reject(err); },
+    );
+  });
+}
+
 const specialUseBlockList = new BlockList();
 const IGNORABLE_SRV_ERRORS = new Set(['ENODATA', 'ENOTFOUND']);
 
@@ -62,7 +76,7 @@ async function resolvePublicAddresses(host: string): Promise<string[]> {
     return [host];
   }
 
-  const resolved = await lookup(host, { all: true, verbatim: true });
+  const resolved = await withTimeout(lookup(host, { all: true, verbatim: true }), DNS_TIMEOUT_MS, 'DNS lookup');
   const addresses = [...new Set(resolved.map((entry) => entry.address))];
   if (addresses.length === 0) {
     throw new Error('host does not resolve');
@@ -116,7 +130,7 @@ export async function resolveMinecraftEndpoint(
 
   if (!getIpFamily(originalHost) && port === 25565) {
     try {
-      const records = await resolveSrv(`_minecraft._tcp.${originalHost}`);
+      const records = await withTimeout(resolveSrv(`_minecraft._tcp.${originalHost}`), DNS_TIMEOUT_MS, 'SRV lookup');
       if (records.length > 0) {
         const [record] = records
           .slice()
