@@ -27,6 +27,8 @@ const SOCKET_LIMITS = {
   look: { max: 600, windowMs: 60_000 },
   runScript: { max: 10, windowMs: 60_000 },
   autoClickChat: { max: 20, windowMs: 60_000 },
+  sneak: { max: 60, windowMs: 60_000 },
+  tabList: { max: 30, windowMs: 60_000 },
 } as const;
 
 const VALID_DIRECTIONS = new Set(['forward', 'back', 'left', 'right']);
@@ -301,6 +303,35 @@ export function setupSocketHandler(
           });
       } catch (err) {
         logger.error({ err }, 'Socket bot:run_script failed');
+      }
+    });
+
+    // Handle bot sneak toggle
+    socket.on('bot:sneak', (payload) => {
+      try {
+        if (!enforceRateLimit(socket.id, 'bot:sneak', SOCKET_LIMITS.sneak.max, SOCKET_LIMITS.sneak.windowMs)) {
+          return;
+        }
+        if (!payload?.account_id || typeof payload.enabled !== 'boolean') return;
+        if (!isValidUuid(payload.account_id)) return;
+        botManager.sneakBot(payload.account_id, payload.enabled, userId);
+      } catch (err) {
+        logger.error({ err }, 'Socket bot:sneak failed');
+      }
+    });
+
+    // Handle tab list request
+    socket.on('bot:tab_list', (payload) => {
+      try {
+        if (!enforceRateLimit(socket.id, 'bot:tab_list', SOCKET_LIMITS.tabList.max, SOCKET_LIMITS.tabList.windowMs)) {
+          return;
+        }
+        if (!payload?.account_id) return;
+        if (!isValidUuid(payload.account_id)) return;
+        const entries = botManager.getTabList(payload.account_id, userId);
+        socket.emit('bot:tab_list_data', { account_id: payload.account_id, entries });
+      } catch (err) {
+        logger.error({ err }, 'Socket bot:tab_list failed');
       }
     });
 

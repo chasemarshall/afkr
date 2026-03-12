@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ArrowUp } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ArrowUp, Users } from 'lucide-react';
 import { getAccounts } from '@/lib/api';
 import { socket } from '@/lib/socket';
 import { useSocket } from '@/context/SocketContext';
 import { useToast } from '@/components/Toast';
 import { usePersistedState } from '@/hooks/usePersistedState';
-import type { MovementDirection } from '@afkr/shared';
+import type { MovementDirection, TabListEntry } from '@afkr/shared';
 
 const SENSITIVITY = 0.003;
 const LOOK_THROTTLE_MS = 50;
@@ -16,6 +16,8 @@ export default function MoveTab() {
   const [moveAccount, setMoveAccount] = usePersistedState('move-account', '');
   const [activeDir, setActiveDir] = useState<string | null>(null);
   const [mouseLook, setMouseLook] = useState(false);
+  const [tabListEntries, setTabListEntries] = useState<TabListEntry[] | null>(null);
+  const [tabListOpen, setTabListOpen] = useState(false);
   const keysHeldRef = useRef(new Set<string>());
   const dpadRef = useRef<HTMLDivElement>(null);
   const lookAccum = useRef({ yaw: 0, pitch: 0 });
@@ -70,6 +72,21 @@ export default function MoveTab() {
 
   function handleToggleAutoClick(accountId: string, enabled: boolean): void {
     socket.emit('bot:auto_click_chat', { account_id: accountId, enabled });
+  }
+
+  function handleSneak(accountId: string, enabled: boolean): void {
+    socket.emit('bot:sneak', { account_id: accountId, enabled });
+  }
+
+  function handleTabList(): void {
+    const targets = getMoveTargets();
+    if (targets.length === 0) {
+      toast('select an online account', 'error');
+      return;
+    }
+    const id = targets[0];
+    socket.emit('bot:tab_list', { account_id: id });
+    setTabListOpen(true);
   }
 
   // Mouse look: accumulate deltas and send throttled
@@ -127,7 +144,16 @@ export default function MoveTab() {
     }
   }, [mouseLook, moveAccount, accounts, botStates]);
 
-  // Keyboard controls for WASD/arrows/space
+  // Listen for tab list data from server
+  useEffect(() => {
+    function onTabListData(data: { account_id: string; entries: TabListEntry[] }): void {
+      setTabListEntries(data.entries);
+    }
+    socket.on('bot:tab_list_data', onTabListData);
+    return () => { socket.off('bot:tab_list_data', onTabListData); };
+  }, []);
+
+  // Keyboard controls for WASD/arrows/space/shift/tab
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent): void {
       if (
@@ -147,9 +173,28 @@ export default function MoveTab() {
         e.preventDefault();
         handleJump();
       }
+      if (e.key === 'Shift' && !keysHeldRef.current.has('shift')) {
+        e.preventDefault();
+        keysHeldRef.current.add('shift');
+        const targets = getMoveTargets();
+        for (const id of targets) {
+          socket.emit('bot:sneak', { account_id: id, enabled: true });
+        }
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        handleTabList();
+      }
     }
     function onKeyUp(e: KeyboardEvent): void {
       keysHeldRef.current.delete(e.key.toLowerCase());
+      if (e.key === 'Shift') {
+        keysHeldRef.current.delete('shift');
+        const targets = getMoveTargets();
+        for (const id of targets) {
+          socket.emit('bot:sneak', { account_id: id, enabled: false });
+        }
+      }
     }
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
@@ -274,6 +319,38 @@ export default function MoveTab() {
               <p className="text-xs text-overlay0">no bots online</p>
             )}
           </div>
+
+          {/* Sneak toggles */}
+          <div className="space-y-1.5">
+            <span className="block text-xs text-overlay1">sneak</span>
+            {accounts?.filter((a) => botStates.get(a.id)?.status === 'online').map((a) => {
+              const state = botStates.get(a.id);
+              const isOn = state?.sneaking === true;
+              return (
+                <div key={a.id} className="flex items-center justify-between py-1">
+                  <span className="text-xs text-subtext0">{a.username}</span>
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => handleSneak(a.id, !isOn)}
+                    className={`relative h-5 w-9 rounded-full transition-colors duration-200 ${
+                      isOn ? 'bg-teal/30' : 'bg-surface1'
+                    }`}
+                  >
+                    <motion.div
+                      animate={{ x: isOn ? 16 : 2 }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                      className={`absolute top-0.5 h-4 w-4 rounded-full transition-colors duration-200 ${
+                        isOn ? 'bg-teal' : 'bg-overlay0'
+                      }`}
+                    />
+                  </motion.button>
+                </div>
+              );
+            })}
+            {(!accounts || accounts.filter((a) => botStates.get(a.id)?.status === 'online').length === 0) && (
+              <p className="text-xs text-overlay0">no bots online</p>
+            )}
+          </div>
         </div>
 
         {/* D-Pad + Mouse Look */}
@@ -349,6 +426,55 @@ export default function MoveTab() {
             </svg>
             {mouseLook ? 'mouse look active (esc to exit)' : 'mouse look'}
           </motion.button>
+
+          {/* Tab list button */}
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleTabList}
+            className="flex items-center gap-2 rounded px-3 py-1.5 text-xs transition-colors bg-surface0/50 text-overlay1 hover:bg-surface0 hover:text-text"
+          >
+            <Users size={12} />
+            tab list
+          </motion.button>
+
+          {/* Tab list overlay */}
+          <AnimatePresence>
+            {tabListOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 4 }}
+                className="w-full rounded border border-surface1 bg-base p-2"
+              >
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className="text-xs text-overlay1">players online</span>
+                  <button
+                    onClick={() => setTabListOpen(false)}
+                    className="text-[10px] text-overlay0 hover:text-text"
+                  >
+                    close
+                  </button>
+                </div>
+                {tabListEntries === null ? (
+                  <p className="text-xs text-overlay0">loading…</p>
+                ) : tabListEntries.length === 0 ? (
+                  <p className="text-xs text-overlay0">no players found</p>
+                ) : (
+                  <ul className="max-h-40 overflow-y-auto space-y-0.5">
+                    {tabListEntries.map((entry, i) => (
+                      <li key={i} className="flex items-center justify-between text-xs">
+                        <span className="text-subtext0">{entry.displayName || entry.name}</span>
+                        {entry.ping !== undefined && (
+                          <span className="text-[10px] text-overlay0 tabular-nums">{entry.ping}ms</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Keyboard hint */}
@@ -358,6 +484,8 @@ export default function MoveTab() {
             <p><span className="text-subtext0">wasd</span> move</p>
             <p><span className="text-subtext0">arrows</span> move</p>
             <p><span className="text-subtext0">space</span> jump</p>
+            <p><span className="text-subtext0">shift</span> sneak</p>
+            <p><span className="text-subtext0">tab</span> player list</p>
             <p><span className="text-subtext0">mouse</span> look</p>
           </div>
         </div>

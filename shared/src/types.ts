@@ -133,6 +133,7 @@ export interface BotState {
   anti_afk_interval?: number;
   auto_click_chat?: boolean;
   inventory?: InventoryItem[];
+  sneaking?: boolean;
 }
 
 export interface ChatMessage {
@@ -147,6 +148,7 @@ export interface ServerToClientEvents {
   'bot:chat': (msg: ChatMessage) => void;
   'bot:all_states': (states: BotState[]) => void;
   'bot:script_status': (data: ScriptStatusEvent) => void;
+  'bot:tab_list_data': (data: { account_id: string; entries: TabListEntry[] }) => void;
   'auth:device_code': (data: { account_id: string; user_code: string; verification_uri: string }) => void;
   'auth:complete': (data: { account_id: string; username: string }) => void;
   'auth:error': (data: { account_id: string; error: string }) => void;
@@ -179,6 +181,18 @@ export interface AutoClickChatPayload {
   enabled: boolean;
 }
 
+export interface SneakPayload {
+  account_id: string;
+  enabled: boolean;
+}
+
+export interface TabListEntry {
+  name: string;
+  displayName?: string;
+  gamemode?: number;
+  ping?: number;
+}
+
 export interface ClientToServerEvents {
   'bot:connect': (payload: ConnectBotPayload) => void;
   'bot:disconnect': (account_id: string) => void;
@@ -190,6 +204,8 @@ export interface ClientToServerEvents {
   'bot:look': (payload: LookPayload) => void;
   'bot:run_script': (payload: RunScriptPayload) => void;
   'bot:auto_click_chat': (payload: AutoClickChatPayload) => void;
+  'bot:sneak': (payload: SneakPayload) => void;
+  'bot:tab_list': (payload: { account_id: string }) => void;
 }
 
 // === Scripts ===

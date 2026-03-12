@@ -11,7 +11,7 @@ import { createSession, endSession } from '../db/sessions.js';
 import { logCommand } from '../db/commands.js';
 import { isAdminUserId } from '../db/ownership.js';
 import { resolveMinecraftEndpoint } from '../lib/network.js';
-import type { BotState, ChatMessage, MovementDirection } from '@afkr/shared';
+import type { BotState, ChatMessage, MovementDirection, TabListEntry } from '@afkr/shared';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STATE_FILE = join(__dirname, '../../.bot-state.json');
@@ -200,6 +200,18 @@ class BotManager extends EventEmitter {
     const instance = this.getOwnedBot(accountId, userId);
     if (!instance) return;
     instance.setAutoClickChat(enabled);
+  }
+
+  sneakBot(accountId: string, enabled: boolean, userId: string): void {
+    const instance = this.getOwnedBot(accountId, userId);
+    if (!instance) throw new Error('Bot not found');
+    instance.setSneaking(enabled);
+  }
+
+  getTabList(accountId: string, userId: string): TabListEntry[] {
+    const instance = this.getOwnedBot(accountId, userId);
+    if (!instance) return [];
+    return instance.getTabList();
   }
 
   getBot(accountId: string, userId: string): BotInstance | undefined {

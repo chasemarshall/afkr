@@ -3,7 +3,7 @@ import { Socket, connect as openTcpConnection } from 'net';
 import mineflayer from 'mineflayer';
 import pino from 'pino';
 import { authenticateMinecraftClient } from './MinecraftAuth.js';
-import type { BotState, BotStatus, MovementDirection, InventoryItem } from '@afkr/shared';
+import type { BotState, BotStatus, MovementDirection, InventoryItem, TabListEntry } from '@afkr/shared';
 
 const logger = pino({ name: 'BotInstance' });
 
@@ -54,6 +54,7 @@ export class BotInstance extends EventEmitter {
   private antiAfkIntervalMs = 25_000;
   private autoClickChat = false;
   private inventory: InventoryItem[] = [];
+  private sneaking = false;
   private joinCommand: string | undefined;
   private lobbyHeartbeatInterval: NodeJS.Timeout | null = null;
   /** How often to re-run the join command as a safety net (30 min) */
@@ -511,6 +512,7 @@ export class BotInstance extends EventEmitter {
     this.position = undefined;
     this.health = 0;
     this.food = 0;
+    this.sneaking = false;
   }
 
   move(direction: MovementDirection, durationMs = 400): void {
@@ -575,7 +577,9 @@ export class BotInstance extends EventEmitter {
     if (!this.bot || this.status !== 'online') {
       throw new Error('Bot is not connected');
     }
+    this.sneaking = enabled;
     this.bot.setControlState('sneak', enabled);
+    this.emit('stateChange', this.getState());
   }
 
   setSprinting(enabled: boolean): void {
@@ -617,6 +621,29 @@ export class BotInstance extends EventEmitter {
     }
   }
 
+  getTabList(): TabListEntry[] {
+    if (!this.bot) return [];
+    try {
+      const entries: TabListEntry[] = [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const tabList = (this.bot as any).tablist;
+      if (tabList && typeof tabList === 'object') {
+        for (const entry of Object.values(tabList) as Record<string, unknown>[]) {
+          const name = typeof entry.name === 'string' ? entry.name : String(entry.name ?? '');
+          if (!name) continue;
+          const item: TabListEntry = { name };
+          if (typeof entry.displayName === 'string') item.displayName = entry.displayName;
+          if (typeof entry.gamemode === 'number') item.gamemode = entry.gamemode;
+          if (typeof entry.ping === 'number') item.ping = entry.ping;
+          entries.push(item);
+        }
+      }
+      return entries.sort((a, b) => a.name.localeCompare(b.name));
+    } catch {
+      return [];
+    }
+  }
+
   getState(): BotState {
     return {
       account_id: this.accountId,
@@ -632,6 +659,7 @@ export class BotInstance extends EventEmitter {
       anti_afk_interval: this.antiAfkIntervalMs,
       auto_click_chat: this.autoClickChat,
       inventory: this.inventory,
+      sneaking: this.sneaking,
     };
   }
 
