@@ -263,14 +263,14 @@ export default function Landing() {
           whileInView="visible"
           viewport={{ once: true, margin: '-60px' }}
           variants={staggerContainer}
-          className="grid gap-px rounded-xl border border-surface0 bg-surface0 sm:grid-cols-2"
+          className="grid gap-4 sm:grid-cols-2"
         >
           {features.map((f) => (
             <motion.div
               key={f.title}
               variants={fadeUp}
               custom={0}
-              className="group relative flex flex-col gap-3 overflow-hidden bg-base p-8 transition-colors duration-300 hover:bg-mantle/50 sm:p-10 first:rounded-tl-xl first:sm:rounded-bl-xl last:rounded-br-xl last:sm:rounded-tr-xl [&:nth-child(2)]:rounded-tr-xl [&:nth-child(2)]:sm:rounded-tr-xl [&:nth-child(3)]:rounded-bl-xl [&:nth-child(3)]:sm:rounded-bl-xl"
+              className="group relative flex flex-col gap-3 overflow-hidden rounded-xl border border-surface0 bg-base p-8 transition-colors duration-300 hover:border-surface1 hover:bg-mantle/50 sm:p-10"
             >
               {/* hover glow */}
               <div
